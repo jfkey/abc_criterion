@@ -148,6 +148,8 @@ struct Abc_Obj_t_     // 48/72 bytes (32-bits/64-bits)
       Abc_Obj_t *     pCopy;         // the copy of this object
       int             iTemp;
       float           dTemp; };
+    float             pr;           // pagerank score of the node 
+    float             ppr;          // previous pagerank score of the node
 };
 
 struct Abc_Ntk_t_ 
@@ -339,11 +341,15 @@ static inline Abc_Ntk_t * Abc_ObjModel( Abc_Obj_t * pObj )           { assert( p
 static inline void *      Abc_ObjData( Abc_Obj_t * pObj )            { return pObj->pData;              }
 static inline Abc_Obj_t * Abc_ObjEquiv( Abc_Obj_t * pObj )           { return (Abc_Obj_t *)pObj->pData; }
 static inline Abc_Obj_t * Abc_ObjCopyCond( Abc_Obj_t * pObj )        { return Abc_ObjRegular(pObj)->pCopy? Abc_ObjNotCond(Abc_ObjRegular(pObj)->pCopy, Abc_ObjIsComplement(pObj)) : NULL;  }
+static inline float       Abc_ObjPPR( Abc_Obj_t * pObj )             { return pObj->ppr;                }   
+static inline float       Abc_ObjPR( Abc_Obj_t * pObj )              { return pObj->pr;                 }
 
 // setting data members of the network
 static inline void        Abc_ObjSetLevel( Abc_Obj_t * pObj, int Level )         { pObj->Level =  Level;    } 
 static inline void        Abc_ObjSetCopy( Abc_Obj_t * pObj, Abc_Obj_t * pCopy )  { pObj->pCopy =  pCopy;    } 
 static inline void        Abc_ObjSetData( Abc_Obj_t * pObj, void * pData )       { pObj->pData =  pData;    } 
+static inline void        Abc_ObjsetPPR( Abc_Obj_t * pObj, float ppr )           { pObj->ppr =  ppr;        }
+static inline void        Abc_ObjsetPR( Abc_Obj_t * pObj, float pr )             { pObj->pr =  pr;          }
 
 // checking the object type
 static inline int         Abc_ObjIsNone( Abc_Obj_t * pObj )          { return pObj->Type == ABC_OBJ_NONE;    }
@@ -551,6 +557,10 @@ extern ABC_DLL void               Abc_AigFree( Abc_Aig_t * pMan );
 extern ABC_DLL int                Abc_AigCleanup( Abc_Aig_t * pMan );
 extern ABC_DLL int                Abc_AigCheck( Abc_Aig_t * pMan );
 extern ABC_DLL int                Abc_AigLevel( Abc_Ntk_t * pNtk );
+// Network path analysis    
+extern ABC_DLL float               Abc_NtkPathRank( Abc_Ntk_t * pNtk ); 
+extern ABC_DLL float               Abc_NtkMaxPR( Abc_Ntk_t * pNtk ); 
+
 extern ABC_DLL Abc_Obj_t *        Abc_AigConst1( Abc_Ntk_t * pNtk );
 extern ABC_DLL Abc_Obj_t *        Abc_AigAnd( Abc_Aig_t * pMan, Abc_Obj_t * p0, Abc_Obj_t * p1 );
 extern ABC_DLL Abc_Obj_t *        Abc_AigAndLookup( Abc_Aig_t * pMan, Abc_Obj_t * p0, Abc_Obj_t * p1 );

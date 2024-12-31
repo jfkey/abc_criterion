@@ -20,6 +20,9 @@
 
 #include "abc.h"
 #include "proof/cec/cec.h"
+#include "misc/vec/vec.h"
+#include "misc/vec/vecInt.h"
+#include <math.h>
 
 ABC_NAMESPACE_IMPL_START
 
@@ -1485,13 +1488,175 @@ int Abc_NtkLevel( Abc_Ntk_t * pNtk )
     return LevelsMax;
 }
 
+
+/**Function*************************************************************
+
+  Synopsis    [Computes the cirtical path of pagerank score for the given AIG.]
+
+  Description []
+               
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+float Abc_NtkPathRank( Abc_Ntk_t * pNtk ){
+    Abc_Obj_t * pNode, *pNext;
+    int i, j;
+   
+    // set for pagerank 
+    int num_iterations = 0;
+    int max_iterations = 100;
+    float convergence = 0.0001;
+    float damping_factor = 0.85;
+    float diff = 1.0;
+    float sum_pr = 0; 
+    float dangling_pr = 0; 
+    int num_nodes =  Abc_NtkObjNum(pNtk);
+    if ( num_nodes == 0 )
+        return 0;
+
+    // init pagerank 
+    Abc_NtkForEachObj( pNtk, pNode, i ){
+        pNode->pr = 1.0 / (num_nodes*1.0);
+        pNode->ppr = 1.0 / (num_nodes*1.0);
+    }
+
+    while (diff > convergence && num_iterations < max_iterations) {
+        sum_pr = 0;
+        dangling_pr = 0;
+
+        // compute danling pagerank and non-dangling pagerank
+        Abc_NtkForEachObj( pNtk, pNode, i ){
+            float curr_pr = pNode->pr;
+            sum_pr += curr_pr;
+            if (Abc_ObjFaninNum(pNode) == 0){       // PI nodes
+                dangling_pr += curr_pr;
+            }
+        }
+
+        if (num_iterations != 0){
+            Abc_NtkForEachObj( pNtk, pNode, i ){
+                pNode->ppr = pNode->pr;
+            }
+        }
+
+        // normalize the elments of the pagerank vertor sum to 1
+        sum_pr = 1; 
+
+        float one_Av = damping_factor * dangling_pr / num_nodes;
+        float one_Iv = (1-damping_factor) * sum_pr / num_nodes;
+        diff = 0; 
+
+        Abc_NtkForEachObj( pNtk, pNode, i ){   
+            float h = 0.0; 
+            Abc_ObjForEachFanout(pNode, pNext, j ){
+                float h_v = (Abc_ObjFaninNum(pNext)) ? 1.0 / Abc_ObjFaninNum(pNext): 0.0;
+                h += h_v * pNext->ppr;
+            }    
+            h *= damping_factor;
+            pNode->pr = one_Av + one_Iv + h; 
+            diff += fabs(pNode->pr - pNode->ppr);
+        }
+        num_iterations++;
+    }
+
+    sum_pr = 0;
+    dangling_pr = 0;    
+    // 找出最大的 PageRank 值
+    Abc_NtkForEachObj( pNtk, pNode, i ){
+        sum_pr += Abc_ObjPR(pNode);
+        if (Abc_ObjFaninNum(pNode) == 0){
+            dangling_pr += Abc_ObjPR(pNode);
+        }
+        // printf("PR: %f , id %d \n", Abc_ObjPR(pNode), Abc_ObjId(pNode) );
+    }
+    // printf("sum_damp: %f , sum_non_damp: %f \n", dangling_pr, sum_pr-dangling_pr);
+    // compute the max path from the pagerank score
+    return  Abc_NtkMaxPR(pNtk);
+}
+ 
+
+float Abc_NtkMaxPR( Abc_Ntk_t * pNtk ) {
+    Vec_Flt_t * vDist = NULL;  // 存储到每个节点的最大PR路径和
+    Vec_Int_t * vPred = NULL;  // 存储前驱节点,用于重建路径
+    Abc_Obj_t * pObj = NULL;
+    float maxPathSum = 0;
+    int maxPathEnd = -1;
+    int i;
+    int Entry; 
+
+    assert( vDist == NULL );
+    vDist = Vec_FltAlloc( Abc_NtkObjNumMax(pNtk) );
+    Vec_FltFill( vDist, Abc_NtkObjNumMax(pNtk), 0 );
+    assert( vPred == NULL );
+    vPred = Vec_IntAlloc( Abc_NtkObjNumMax(pNtk) );
+    Vec_IntFill( vPred, Abc_NtkObjNumMax(pNtk), 0 );
+ 
+     
+    // 对PI节点初始化
+    Abc_NtkForEachPi( pNtk, pObj, i ) {
+        Vec_FltWriteEntry(vDist, Abc_ObjId(pObj), Abc_ObjPR(pObj));  
+    }
+
+    
+    // 按照拓扑顺序遍历所有节点
+    Abc_NtkForEachNode( pNtk, pObj, i ) {
+        Abc_Obj_t * pFanin;
+        float maxFaninDist = -1;
+        int maxFaninId = -1;
+        int k;
+        
+        // 检查所有fanin,找到最大的路径
+        Abc_ObjForEachFanin( pObj, pFanin, k ) {
+            float faninDist = Vec_FltEntry(vDist, Abc_ObjId(pFanin));
+            if (faninDist > maxFaninDist) {
+                maxFaninDist = faninDist;
+                maxFaninId = Abc_ObjId(pFanin);
+            }
+        }
+        // 更新当前节点的最大路径和
+        if (maxFaninDist > 0 ){
+            Vec_FltWriteEntry(vDist, Abc_ObjId(pObj), maxFaninDist + Abc_ObjPR(pObj));
+            Vec_IntWriteEntry(vPred, Abc_ObjId(pObj), maxFaninId); 
+        }
+    }
+
+    // 在PO中找到最大路径终点
+    Abc_NtkForEachPo( pNtk, pObj, i ) {
+        float dist = Vec_FltEntry(vDist, Abc_ObjId(Abc_ObjFanin0(pObj)));
+        if (dist > maxPathSum) {
+            maxPathSum = dist;
+            maxPathEnd = Abc_ObjId(Abc_ObjFanin0(pObj));
+        }
+    }
+
+     
+    // 打印最大PR路径
+    if (maxPathEnd != -1) {
+        // printf("Maximum PR path:\n");
+        Vec_IntForEachEntry( vPred, Entry, i ){
+            pObj = Abc_NtkObj(pNtk, Entry);
+            // printf("Node %d (PR: %.4f)\n", Entry, Vec_FltEntry(vDist, Entry));
+        } 
+        // printf("Total path PR: %.6f\n", maxPathSum);
+    }
+
+    // 清理
+    Vec_FltFree(vDist);
+    Vec_IntFree(vPred);
+
+    return maxPathSum;
+}
+ 
+
 /**Function*************************************************************
 
   Synopsis    [Computes the number of logic levels not counting PIs/POs.]
 
   Description []
                
-  SideEffects []
+  SideEffects []·
 
   SeeAlso     []
 

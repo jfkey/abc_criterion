@@ -368,11 +368,15 @@ void Abc_NtkPrintStats( Abc_Ntk_t * pNtk, int fFactored, int fSaveBest, int fDum
     {
         extern int Abc_NtkGetMultiRefNum( Abc_Ntk_t * pNtk );
         Abc_Print( 1,"  lev =%3d", Abc_AigLevel(pNtk) );
+        Abc_Print( 1,"  wlev =%5.4f", Abc_NtkPathRank(pNtk) ); 
 //        Abc_Print( 1,"  ff = %5d", Abc_NtkNodeNum(pNtk) + 2 * (Abc_NtkCoNum(pNtk)+Abc_NtkGetMultiRefNum(pNtk)) );
 //        Abc_Print( 1,"  var = %5d", Abc_NtkCiNum(pNtk) + Abc_NtkCoNum(pNtk)+Abc_NtkGetMultiRefNum(pNtk) );
     }
-    else
+    else{
         Abc_Print( 1,"  lev = %d", Abc_NtkLevel(pNtk) );
+
+
+    }
     if ( pNtk->nBarBufs2 )
         Abc_Print( 1,"  buf = %d", pNtk->nBarBufs2 );
     if ( fUseLutLib && Abc_FrameReadLibLut() )
