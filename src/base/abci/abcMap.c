@@ -140,7 +140,6 @@ Abc_Ntk_t * Abc_NtkMap( Abc_Ntk_t * pNtk, Mio_Library_t* userLib, double DelayTa
         vSwitching = Sim_NtkComputeSwitching( pNtk, 4096 );
         pSwitching = (float *)vSwitching->pArray;
     }
-
     // perform the mapping
     pMan = Abc_NtkToMap( pNtk, DelayTarget, fRecovery, pSwitching, fVerbose );
     if ( pSwitching ) Vec_IntFree( vSwitching );

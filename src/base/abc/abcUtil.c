@@ -1799,8 +1799,8 @@ Vec_Int_t * Abc_NtkGetCiIds( Abc_Ntk_t * pNtk )
   Synopsis    [Puts the nodes into the DFS order and reassign their IDs.]
 
   Description []
-               
   SideEffects []
+               
 
   SeeAlso     []
 

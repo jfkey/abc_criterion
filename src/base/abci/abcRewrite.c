@@ -24,6 +24,7 @@
 
 ABC_NAMESPACE_IMPL_START
 
+extern abctime global_update_time;
 
 /*
     The ideas realized in this package are inspired by the paper:
@@ -110,6 +111,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
     pProgress = Extra_ProgressBarStart( stdout, nNodes );
     Abc_NtkForEachNode( pNtk, pNode, i )
     {
+        // if (i != 32) continue;
         Extra_ProgressBarUpdate( pProgress, i, NULL );
         // stop if all nodes have been tried once
         if ( i >= nNodes )
@@ -135,6 +137,8 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         if ( fPlaceEnable )
             Abc_AigUpdateReset( (Abc_Aig_t *)pNtk->pManFunc );
 
+   
+     
         // complement the FF if needed
         if ( fCompl ) Dec_GraphComplement( pGraph );
 clk = Abc_Clock();
@@ -144,13 +148,16 @@ clk = Abc_Clock();
             break;
         }
 Rwr_ManAddTimeUpdate( pManRwr, Abc_Clock() - clk );
-        if ( fCompl ) Dec_GraphComplement( pGraph );
 
+ 
         // use the array of changed nodes to update placement
 //        if ( fPlaceEnable )
 //            Abc_PlaceUpdate( vAddedCells, vUpdatedNets );
     }
     Extra_ProgressBarStop( pProgress );
+    if ( JF_DEBUG_REWRITE )
+        ABC_PRT( "#############rewrite update level time elapsed", global_update_time );   
+
 Rwr_ManAddTimeTotal( pManRwr, Abc_Clock() - clkStart );
     // print stats
     pManRwr->nNodesEnd = Abc_NtkNodeNum(pNtk);

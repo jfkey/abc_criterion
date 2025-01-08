@@ -1520,6 +1520,8 @@ float Abc_NtkPathRank( Abc_Ntk_t * pNtk ){
     Abc_NtkForEachObj( pNtk, pNode, i ){
         pNode->pr = 1.0 / (num_nodes*1.0);
         pNode->ppr = 1.0 / (num_nodes*1.0);
+        // Abc_ObjSetPR(pNode, 1.0 / (num_nodes*1.0));
+        // Abc_ObjSetPPR(pNode, 1.0 / (num_nodes*1.0));
     }
 
     while (diff > convergence && num_iterations < max_iterations) {
@@ -1595,7 +1597,7 @@ float Abc_NtkMaxPR( Abc_Ntk_t * pNtk ) {
  
      
     // 对PI节点初始化
-    Abc_NtkForEachPi( pNtk, pObj, i ) {
+    Abc_NtkForEachCi( pNtk, pObj, i ) {
         Vec_FltWriteEntry(vDist, Abc_ObjId(pObj), Abc_ObjPR(pObj));  
     }
 

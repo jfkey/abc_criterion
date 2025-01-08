@@ -21,6 +21,9 @@
 #ifndef ABC__base__abc__abc_h
 #define ABC__base__abc__abc_h
 
+#ifndef JF_DEBUG_REWRITE
+#define JF_DEBUG_REWRITE 0
+#endif
 
 ////////////////////////////////////////////////////////////////////////
 ///                          INCLUDES                                ///
@@ -147,11 +150,12 @@ struct Abc_Obj_t_     // 48/72 bytes (32-bits/64-bits)
     union { void *    pTemp;         // temporary store for user's data
       Abc_Obj_t *     pCopy;         // the copy of this object
       int             iTemp;
-      float           dTemp; };
+      float           dTemp; }; 
     float             pr;           // pagerank score of the node 
     float             ppr;          // previous pagerank score of the node
 };
 
+   
 struct Abc_Ntk_t_ 
 {
     // general information 
@@ -341,8 +345,8 @@ static inline Abc_Ntk_t * Abc_ObjModel( Abc_Obj_t * pObj )           { assert( p
 static inline void *      Abc_ObjData( Abc_Obj_t * pObj )            { return pObj->pData;              }
 static inline Abc_Obj_t * Abc_ObjEquiv( Abc_Obj_t * pObj )           { return (Abc_Obj_t *)pObj->pData; }
 static inline Abc_Obj_t * Abc_ObjCopyCond( Abc_Obj_t * pObj )        { return Abc_ObjRegular(pObj)->pCopy? Abc_ObjNotCond(Abc_ObjRegular(pObj)->pCopy, Abc_ObjIsComplement(pObj)) : NULL;  }
-static inline float       Abc_ObjPPR( Abc_Obj_t * pObj )             { return pObj->ppr;                }   
-static inline float       Abc_ObjPR( Abc_Obj_t * pObj )              { return pObj->pr;                 }
+static float       Abc_ObjPPR( Abc_Obj_t * pObj )             { return pObj->ppr;                }   
+static float       Abc_ObjPR( Abc_Obj_t * pObj )              { return pObj->pr;                 }
 
 // setting data members of the network
 static inline void        Abc_ObjSetLevel( Abc_Obj_t * pObj, int Level )         { pObj->Level =  Level;    } 

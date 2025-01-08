@@ -22,6 +22,8 @@
 
 ABC_NAMESPACE_IMPL_START
 
+abctime global_update_time = 0;
+
 /*
     AIG is an And-Inv Graph with structural hashing.
     It is always structurally hashed. It means that at any time:
@@ -859,17 +861,21 @@ int Abc_AigReplace( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int fU
     {
         pOld = (Abc_Obj_t *)Vec_PtrPop( pMan->vStackReplaceOld );
         pNew = (Abc_Obj_t *)Vec_PtrPop( pMan->vStackReplaceNew );
+        if ( JF_DEBUG_REWRITE )
+            printf("##replace old %d new  %d\n", Abc_ObjId(pOld), Abc_ObjId(pNew));
         if ( Abc_ObjFanoutNum(pOld) == 0 )
             //return 0;
             continue;
         Abc_AigReplace_int( pMan, pOld, pNew, fUpdateLevel );
     }
+    abctime clk = Abc_Clock();
     if ( fUpdateLevel )
     {
         Abc_AigUpdateLevel_int( pMan );
-        if ( pMan->pNtkAig->vLevelsR ) 
-            Abc_AigUpdateLevelR_int( pMan );
+        // if ( pMan->pNtkAig->vLevelsR ) 
+        //     Abc_AigUpdateLevelR_int( pMan );
     }
+    global_update_time += Abc_Clock() - clk;
     return 1;
 }
 
@@ -1069,12 +1075,18 @@ void Abc_AigUpdateLevel_int( Abc_Aig_t * pMan )
     // go through the nodes and update the level of their fanouts
     Vec_VecForEachLevel( pMan->vLevels, vVec, i )
     {
-        if ( Vec_PtrSize(vVec) == 0 )
+        
+        if ( Vec_PtrSize(vVec) == 0 ){
+            if ( JF_DEBUG_REWRITE ) printf("##update level %d with empty vec\n", i);
             continue;
+        }
+        if ( JF_DEBUG_REWRITE ) printf("##update level %d with vec size %d\n", i, Vec_PtrSize(vVec));
+
         Vec_PtrForEachEntry( Abc_Obj_t *, vVec, pNode, k )
         {
             if ( pNode == NULL )
                 continue;
+            if ( JF_DEBUG_REWRITE ) printf("\t level %d with node %s\n", i, Abc_ObjName(pNode));
             assert( Abc_ObjIsNode(pNode) );
             assert( (int)pNode->Level == i );
             // clean the mark
@@ -1125,12 +1137,16 @@ void Abc_AigUpdateLevelR_int( Abc_Aig_t * pMan )
     // go through the nodes and update the level of their fanouts
     Vec_VecForEachLevel( pMan->vLevelsR, vVec, i )
     {
-        if ( Vec_PtrSize(vVec) == 0 )
+        if ( Vec_PtrSize(vVec) == 0 ){
+            if ( JF_DEBUG_REWRITE ) printf("##update level r %d with empty vec\n", i);
             continue;
+        }
+        if ( JF_DEBUG_REWRITE ) printf("##update level r %d with node %s\n", i, Abc_ObjName(pNode));
         Vec_PtrForEachEntry( Abc_Obj_t *, vVec, pNode, k )
         {
             if ( pNode == NULL )
                 continue;
+            if ( JF_DEBUG_REWRITE ) printf("\t r level %d with node %s\n", i, Abc_ObjName(pNode));
             assert( Abc_ObjIsNode(pNode) );
             assert( Abc_ObjReverseLevel(pNode) == i );
             // clean the mark

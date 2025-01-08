@@ -19,6 +19,8 @@
 #include "base/abc/abc.h"
 #include "aig/ivy/ivy.h"
 #include "dec.h"
+#include "opt/rwr/rwr.h"
+#include "base/main/main.h"
 
 ABC_NAMESPACE_IMPL_START
 
@@ -253,8 +255,7 @@ int Dec_GraphUpdateNetwork( Abc_Obj_t * pRoot, Dec_Graph_t * pGraph, int fUpdate
     //assert( nGain <= nNodesOld - nNodesNew );
     return RetValue;
 }
-
-
+ 
 /**Function*************************************************************
 
   Synopsis    [Transforms the decomposition graph into the AIG.]
