@@ -110,7 +110,8 @@ static void        Abc_AigUpdateLevel_int( Abc_Aig_t * pMan );
 static void        Abc_AigUpdateLevelR_int( Abc_Aig_t * pMan );
 static void        Abc_AigRemoveFromLevelStructure( Vec_Vec_t * vStruct, Abc_Obj_t * pNode );
 static void        Abc_AigRemoveFromLevelStructureR( Vec_Vec_t * vStruct, Abc_Obj_t * pNode );
-
+// new graph incremental algorithm for reverse level updates
+static void        Abc_AigUpdateLevelR_new( Abc_Aig_t * pMan, Abc_Obj_t * pOld);
 
 ////////////////////////////////////////////////////////////////////////
 ///                     FUNCTION DEFINITIONS                         ///
@@ -855,10 +856,27 @@ int Abc_AigReplace( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int fU
     assert( Vec_PtrSize(pMan->vStackReplaceNew) == 0 );
     Vec_PtrPush( pMan->vStackReplaceOld, pOld );
     Vec_PtrPush( pMan->vStackReplaceNew, pNew );
+    //  if ( pMan->pNtkAig->vLevelsR ) {
+    //     printf("##replace old %d with level %d  New Node %d with level %d", Abc_ObjId(pOld), Abc_ObjLevel(pOld), Abc_ObjRegular(pNew)->Id, Abc_ObjLevel(Abc_ObjRegular(pNew)));
+    // }  
+    int delta_level = Abc_ObjLevel(Abc_ObjRegular(pNew)) - Abc_ObjLevel(pOld);
+    if ( pMan->pNtkAig->vLevelsR ) {
+        if (Abc_ObjLevel(Abc_ObjRegular(pNew)) - Abc_ObjLevel(pOld) > 1)
+        printf("##replace old %d with level %d  New Node %d with level %d\n", Abc_ObjId(pOld), Abc_ObjLevel(pOld), Abc_ObjRegular(pNew)->Id, Abc_ObjLevel(Abc_ObjRegular(pNew)));
+    }  
+    int num_updates = 0;
+
+
+    // printf("##replace old %d new  %d\n", Abc_ObjId(pOld), Abc_ObjId(pNew));
+    // int old_level = 0;
+    // int old_id = Abc_ObjId(pOld);
+    // if (pMan->pNtkAig->vLevelsR)
+    //     old_level = Abc_ObjReverseLevel(pOld);
     assert( !Abc_ObjIsComplement(pOld) );
     // process the replacements
     while ( Vec_PtrSize(pMan->vStackReplaceOld) )
     {
+        num_updates++;
         pOld = (Abc_Obj_t *)Vec_PtrPop( pMan->vStackReplaceOld );
         pNew = (Abc_Obj_t *)Vec_PtrPop( pMan->vStackReplaceNew );
         if ( JF_DEBUG_REWRITE )
@@ -868,16 +886,21 @@ int Abc_AigReplace( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int fU
             continue;
         Abc_AigReplace_int( pMan, pOld, pNew, fUpdateLevel );
     }
+    if (num_updates > 1) printf("##num updates %d node (%d)\n", num_updates, Abc_ObjId(pOld));
     abctime clk = Abc_Clock();
     if ( fUpdateLevel )
     {
         Abc_AigUpdateLevel_int( pMan );
-        // if ( pMan->pNtkAig->vLevelsR ) 
-        //     Abc_AigUpdateLevelR_int( pMan );
-    }
-    global_update_time += Abc_Clock() - clk;
+        if ( pMan->pNtkAig->vLevelsR ) 
+            // Abc_AigUpdateLevelR_new( pMan, pOld );
+            Abc_AigUpdateLevelR_int( pMan );
+    } 
+    
+        global_update_time += Abc_Clock() - clk;
     return 1;
 }
+
+
 
 /**Function*************************************************************
 
@@ -933,6 +956,7 @@ void Abc_AigReplace_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, i
         if ( (pFanoutNew = Abc_AigAndLookup( pMan, pFanin1, pFanin2 )) )
         { // such node exists (it may be a constant)
             // schedule replacement of the old fanout by the new fanout
+            printf("## new fanout has exist\n");
             Vec_PtrPush( pMan->vStackReplaceOld, pFanout );
             Vec_PtrPush( pMan->vStackReplaceNew, pFanoutNew );
             continue;
@@ -945,8 +969,11 @@ void Abc_AigReplace_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, i
         if ( pFanout->fMarkA )
             Abc_AigRemoveFromLevelStructure( pMan->vLevels, pFanout );
         // if the node is in the level structure, remove it
-        if ( pFanout->fMarkB )
-            Abc_AigRemoveFromLevelStructureR( pMan->vLevelsR, pFanout );
+        // if ( pFanout->fMarkB )
+        //     Abc_AigRemoveFromLevelStructureR( pMan->vLevelsR, pFanout );
+        if (Abc_ObjRegular(pNew)->fMarkB){
+           Abc_AigRemoveFromLevelStructureR( pMan->vLevelsR, Abc_ObjRegular(pNew) );
+        }
 
         // remove the old fanout node from the structural hashing table
         Abc_AigAndDelete( pMan, pFanout );
@@ -965,9 +992,14 @@ void Abc_AigReplace_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, i
             // schedule the updated fanout for updating reverse level
             if ( pMan->pNtkAig->vLevelsR ) 
             {
-                assert( pFanout->fMarkB == 0 );
-                pFanout->fMarkB = 1;
-                Vec_VecPush( pMan->vLevelsR, Abc_ObjReverseLevel(pFanout), pFanout );
+                // assert( pFanout->fMarkB == 0 );
+                // pFanout->fMarkB = 1;
+                // Vec_VecPush( pMan->vLevelsR, Abc_ObjReverseLevel(pFanout), pFanout );
+                if (Abc_ObjRegular(pNew)->fMarkB == 0){
+                    Abc_ObjRegular(pNew)->fMarkB = 1;
+                    Vec_VecPush( pMan->vLevelsR, Abc_ObjReverseLevel(Abc_ObjRegular(pNew)), Abc_ObjRegular(pNew) );
+                }
+                
             }
         }
 
@@ -975,7 +1007,21 @@ void Abc_AigReplace_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, i
         Abc_ObjForEachFanout( pFanout, pFanoutFanout, v )
             if ( Abc_AigNodeIsAnd(pFanoutFanout) )
                 pFanoutFanout->fExor = Abc_NodeIsExorType(pFanoutFanout);
-    }
+    } 
+
+    // if ( fUpdateLevel )
+    //     {
+    
+    //         // schedule the updated fanout for updating reverse level
+    //         if ( pMan->pNtkAig->vLevelsR ) 
+    //         {
+    //             assert( pFanout->fMarkB == 0 );
+    //             pFanout->fMarkB = 1;
+    //             Vec_VecPush( pMan->vLevelsR, Abc_ObjReverseLevel(pFanout), pFanout );
+    //         }
+    //     }
+
+
     // if the node has no fanouts left, remove its MFFC
     if ( Abc_ObjFanoutNum(pOld) == 0 )
         Abc_AigDeleteNode( pMan, pOld );
@@ -1086,7 +1132,7 @@ void Abc_AigUpdateLevel_int( Abc_Aig_t * pMan )
         {
             if ( pNode == NULL )
                 continue;
-            if ( JF_DEBUG_REWRITE ) printf("\t level %d with node %s\n", i, Abc_ObjName(pNode));
+            if ( JF_DEBUG_REWRITE ) printf("\t level %d with node %d\n", i, Abc_ObjId(pNode));
             assert( Abc_ObjIsNode(pNode) );
             assert( (int)pNode->Level == i );
             // clean the mark
@@ -1141,12 +1187,79 @@ void Abc_AigUpdateLevelR_int( Abc_Aig_t * pMan )
             if ( JF_DEBUG_REWRITE ) printf("##update level r %d with empty vec\n", i);
             continue;
         }
-        if ( JF_DEBUG_REWRITE ) printf("##update level r %d with node %s\n", i, Abc_ObjName(pNode));
+        if ( JF_DEBUG_REWRITE ) printf("##update level r %d with vec size %d\n", i, Vec_PtrSize(vVec));
         Vec_PtrForEachEntry( Abc_Obj_t *, vVec, pNode, k )
         {
             if ( pNode == NULL )
                 continue;
-            if ( JF_DEBUG_REWRITE ) printf("\t r level %d with node %s\n", i, Abc_ObjName(pNode));
+            if ( JF_DEBUG_REWRITE ) printf("\t r level %d with node %d\n", i, Abc_ObjId(pNode));
+            assert( Abc_ObjIsNode(pNode) );
+            assert( Abc_ObjReverseLevel(pNode) == i );
+            // clean the mark
+            assert( pNode->fMarkB == 1 );
+            pNode->fMarkB = 0;
+            // iterate through the fanins
+            Abc_ObjForEachFanin( pNode, pFanin, v )
+            {
+                if ( Abc_ObjIsCi(pFanin) )
+                    continue;
+                // get the new reverse level of this fanin
+                LevelNew = 0;
+                Abc_ObjForEachFanout( pFanin, pFanout, j )
+                    if ( LevelNew < Abc_ObjReverseLevel(pFanout) )
+                        LevelNew = Abc_ObjReverseLevel(pFanout);
+                LevelNew += 1;
+                assert( LevelNew > i );
+                if ( Abc_ObjReverseLevel(pFanin) == LevelNew ) // no change
+                    continue;
+                // if the fanin is present in the data structure, pull it out
+                if ( pFanin->fMarkB )
+                    Abc_AigRemoveFromLevelStructureR( pMan->vLevelsR, pFanin );
+                // update the reverse level
+                Abc_ObjSetReverseLevel( pFanin, LevelNew );
+                // add the fanin to the data structure to update its fanins
+                assert( pFanin->fMarkB == 0 );
+                pFanin->fMarkB = 1;
+                Vec_VecPush( pMan->vLevelsR, LevelNew, pFanin );
+            }
+        }
+        Vec_PtrClear( vVec );
+    }
+}
+
+
+
+
+/**Function*************************************************************
+
+  Synopsis    [New algorithm for updating the level of the node after it has changed.]
+
+  Description []
+               
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+void Abc_AigUpdateLevelR_new( Abc_Aig_t * pMan, Abc_Obj_t * pOld )
+{
+    Abc_Obj_t * pNode, * pFanin, * pFanout;
+    Vec_Ptr_t * vVec;
+    int LevelNew, i, k, v, j;
+
+    // go through the nodes and update the level of their fanouts
+    Vec_VecForEachLevel( pMan->vLevelsR, vVec, i )
+    {
+        if ( Vec_PtrSize(vVec) == 0 ){
+            if ( JF_DEBUG_REWRITE ) printf("##update level r %d with empty vec\n", i);
+            continue;
+        }
+        if ( JF_DEBUG_REWRITE ) printf("##update level r %d with vec size %d\n", i, Vec_PtrSize(vVec));
+        Vec_PtrForEachEntry( Abc_Obj_t *, vVec, pNode, k )
+        {
+            if ( pNode == NULL )
+                continue;
+            if ( JF_DEBUG_REWRITE ) printf("\t r level %d with node %d\n", i, Abc_ObjId(pNode));
             assert( Abc_ObjIsNode(pNode) );
             assert( Abc_ObjReverseLevel(pNode) == i );
             // clean the mark

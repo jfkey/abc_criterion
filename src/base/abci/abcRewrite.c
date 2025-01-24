@@ -109,9 +109,11 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
     pManRwr->nNodesBeg = Abc_NtkNodeNum(pNtk);
     nNodes = Abc_NtkObjNumMax(pNtk);
     pProgress = Extra_ProgressBarStart( stdout, nNodes );
+ 
+
     Abc_NtkForEachNode( pNtk, pNode, i )
     {
-        // if (i != 32) continue;
+        // if (i > 25) continue;
         Extra_ProgressBarUpdate( pProgress, i, NULL );
         // stop if all nodes have been tried once
         if ( i >= nNodes )
@@ -142,14 +144,22 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         // complement the FF if needed
         if ( fCompl ) Dec_GraphComplement( pGraph );
 clk = Abc_Clock();
+if(i==54017){  
         if ( !Dec_GraphUpdateNetwork( pNode, pGraph, fUpdateLevel, nGain ) )
         {
             RetValue = -1;
             break;
         }
+} else {
+    if ( !Dec_GraphUpdateNetwork( pNode, pGraph, fUpdateLevel, nGain ) )
+        {
+            RetValue = -1;
+            break;
+        }
+}
 Rwr_ManAddTimeUpdate( pManRwr, Abc_Clock() - clk );
-
- 
+    if (fCompl) Dec_GraphComplement(pGraph);
+       
         // use the array of changed nodes to update placement
 //        if ( fPlaceEnable )
 //            Abc_PlaceUpdate( vAddedCells, vUpdatedNets );
