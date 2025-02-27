@@ -1578,7 +1578,7 @@ float Abc_NtkPathRank( Abc_Ntk_t * pNtk ){
     return  Abc_NtkMaxPR(pNtk);
 }
  
-
+ 
 float Abc_NtkMaxPR( Abc_Ntk_t * pNtk ) {
     Vec_Flt_t * vDist = NULL;  // 存储到每个节点的最大PR路径和
     Vec_Int_t * vPred = NULL;  // 存储前驱节点,用于重建路径

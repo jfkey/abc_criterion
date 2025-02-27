@@ -38,6 +38,7 @@
 #include "vecBit.h"
 #include "vecMem.h"
 #include "vecWec.h"
+#include "pQue.h"
 
 ////////////////////////////////////////////////////////////////////////
 ///                      MACRO DEFINITIONS                           ///
