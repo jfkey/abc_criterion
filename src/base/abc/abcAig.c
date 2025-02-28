@@ -1341,7 +1341,7 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
             pFanin1 = Abc_ObjRegular( pNew );
             if ( pFanin1->fMarkB )
                 pFanin1 = 0; 
-            if ( !fUpdateLevel && pMan->pNtkAig->vLevelsR )
+            if ( fUpdateLevel && pMan->pNtkAig->vLevelsR )
             {
                 Abc_ObjSetReverseLevel( pFanin1, Abc_ObjReverseLevel(pOld) );
                 assert( pFanin1->fMarkB == 0 );
