@@ -22,6 +22,7 @@
 #include "opt/rwr/rwr.h"
 #include "bool/dec/dec.h"
 
+
 ABC_NAMESPACE_IMPL_START
 
 extern abctime global_update_time;
@@ -73,6 +74,7 @@ int Abc_NtkRewrite( Abc_Ntk_t * pNtk, int fUpdateLevel, int fUseZeros, int fVerb
 
     assert( Abc_NtkIsStrash(pNtk) );
     // cleanup the AIG
+     
     Abc_AigCleanup((Abc_Aig_t *)pNtk->pManFunc);
 /*
     {
@@ -125,6 +127,12 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         if ( Abc_ObjFanoutNum(pNode) > 1000 )
             continue;
 
+
+         // lazy update strategy
+        // if current level is larger or equal to the minimum level, perform batch update  
+        if (fUpdateLevel)
+            Abc_AigUpdateLevel_Trigger((Abc_Aig_t *)pNtk->pManFunc, Abc_ObjLevel(pNode), 0);
+    
         // for each cut, try to resynthesize it
         nGain = Rwr_NodeRewrite( pManRwr, pManCut, pNode, fUpdateLevel, fUseZeros, fPlaceEnable );
         if ( !(nGain > 0 || (nGain == 0 && fUseZeros)) )
@@ -164,6 +172,11 @@ Rwr_ManAddTimeUpdate( pManRwr, Abc_Clock() - clk );
 //        if ( fPlaceEnable )
 //            Abc_PlaceUpdate( vAddedCells, vUpdatedNets );
     }
+    
+    // perform final update
+    if (fUpdateLevel)
+        Abc_AigUpdateLevel_Trigger((Abc_Aig_t *)pNtk->pManFunc, Abc_ObjLevel(pNode), 1);
+    
     Extra_ProgressBarStop( pProgress );
     if ( JF_DEBUG_REWRITE )
         ABC_PRT( "#############rewrite update level time elapsed", global_update_time );   

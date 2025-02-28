@@ -23,6 +23,7 @@
 ABC_NAMESPACE_IMPL_START
 
 abctime global_update_time = 0;
+ 
 
 /*
     AIG is an And-Inv Graph with structural hashing.
@@ -129,6 +130,8 @@ static void        Abc_AigUpdateLevelInc_int( Abc_Aig_t * pMan );
 static void        Abc_AigUpdateLevelIncR_int( Abc_Aig_t * pMan );
 static void        Abc_AigAndDeleteInc( Abc_Aig_t * pMan, Abc_Obj_t * pThis );
 
+ 
+
 ////////////////////////////////////////////////////////////////////////
 ///                     FUNCTION DEFINITIONS                         ///
 ////////////////////////////////////////////////////////////////////////
@@ -162,6 +165,7 @@ Abc_Aig_t * Abc_AigAlloc( Abc_Ntk_t * pNtkAig )
 
     pMan->vQueue = P_QueAlloc( 100 );
     pMan->vQueueR = P_QueAlloc( 100 );
+    pMan->nLevelMin = ABC_INFINITY;
     
 
     // create the constant node
@@ -1249,8 +1253,18 @@ void Abc_AigUpdateLevelR_int( Abc_Aig_t * pMan )
     }
 }
 
-
-
+  
+void Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan, int candidateLevel, int flag ){  
+    // if current level is larger or equal to the minimum level, perform batch update  
+    if (candidateLevel >= pMan->nLevelMin)
+        Abc_AigUpdateLevelIncR_int( pMan );
+    // if flag is true, perform final update
+    if (flag)
+        Abc_AigUpdateLevelInc_int( pMan );
+    // reset the minimum level
+    pMan->nLevelMin = ABC_INFINITY;
+    return; 
+}
 
 /**Function*************************************************************
 
@@ -1290,6 +1304,12 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
         num_updates++;
         pOld = (Abc_Obj_t *)Vec_PtrPop( pMan->vStackReplaceOld );
         pNew = (Abc_Obj_t *)Vec_PtrPop( pMan->vStackReplaceNew );
+
+        if ( Abc_ObjLevel(pNew) < pMan->nLevelMin )
+            pMan->nLevelMin = Abc_ObjLevel(pNew);
+        if ( Abc_ObjLevel(pOld) < pMan->nLevelMin )
+            pMan->nLevelMin = Abc_ObjLevel(pOld);
+
         if ( JF_DEBUG_REWRITE )
             printf("##replace old %d new  %d\n", Abc_ObjId(pOld), Abc_ObjId(pNew));
         if ( Abc_ObjFanoutNum(pOld) == 0 )
@@ -1368,6 +1388,8 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
         if ( (pFanoutNew = Abc_AigAndLookup( pMan, pFanin1, pFanin2 )) )
         { // such node exists (it may be a constant)
             // schedule replacement of the old fanout by the new fanout
+            if (Abc_ObjLevel(pFanoutNew) < pMan->nLevelMin)
+                pMan->nLevelMin = Abc_ObjLevel(pFanoutNew);
             printf("## new fanout has exist\n");
             Vec_PtrPush( pMan->vStackReplaceOld, pFanout );
             Vec_PtrPush( pMan->vStackReplaceNew, pFanoutNew );

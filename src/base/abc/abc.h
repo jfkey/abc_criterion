@@ -564,6 +564,8 @@ extern ABC_DLL int                Abc_AigLevel( Abc_Ntk_t * pNtk );
 // Network path analysis    
 extern ABC_DLL float               Abc_NtkPathRank( Abc_Ntk_t * pNtk ); 
 extern ABC_DLL float               Abc_NtkMaxPR( Abc_Ntk_t * pNtk ); 
+// lazy update strategy
+extern ABC_DLL void                Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan, int candidateLevel, int flag );
 
 extern ABC_DLL Abc_Obj_t *        Abc_AigConst1( Abc_Ntk_t * pNtk );
 extern ABC_DLL Abc_Obj_t *        Abc_AigAnd( Abc_Aig_t * pMan, Abc_Obj_t * p0, Abc_Obj_t * p1 );
