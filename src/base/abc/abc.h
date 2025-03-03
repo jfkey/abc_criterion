@@ -559,13 +559,14 @@ static inline void        Abc_ObjSetMvVar( Abc_Obj_t * pObj, void * pV) { Vec_At
 extern ABC_DLL Abc_Aig_t *        Abc_AigAlloc( Abc_Ntk_t * pNtk );
 extern ABC_DLL void               Abc_AigFree( Abc_Aig_t * pMan );
 extern ABC_DLL int                Abc_AigCleanup( Abc_Aig_t * pMan );
+extern ABC_DLL int                Abc_AigCleanupInc( Abc_Aig_t * pMan );
 extern ABC_DLL int                Abc_AigCheck( Abc_Aig_t * pMan );
 extern ABC_DLL int                Abc_AigLevel( Abc_Ntk_t * pNtk );
 // Network path analysis    
 extern ABC_DLL float               Abc_NtkPathRank( Abc_Ntk_t * pNtk ); 
 extern ABC_DLL float               Abc_NtkMaxPR( Abc_Ntk_t * pNtk ); 
 // lazy update strategy
-extern ABC_DLL void                Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan, int candidateLevel, int flag );
+extern ABC_DLL void                Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan, int candidateLevel, int finalUpdate );
 
 extern ABC_DLL Abc_Obj_t *        Abc_AigConst1( Abc_Ntk_t * pNtk );
 extern ABC_DLL Abc_Obj_t *        Abc_AigAnd( Abc_Aig_t * pMan, Abc_Obj_t * p0, Abc_Obj_t * p1 );
@@ -579,6 +580,8 @@ extern ABC_DLL Abc_Obj_t *        Abc_AigMiter( Abc_Aig_t * pMan, Vec_Ptr_t * vP
 extern ABC_DLL int                Abc_AigReplace( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int  fUpdateLevel );
 extern ABC_DLL int                Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int  fUpdateLevel );
 extern ABC_DLL void               Abc_AigDeleteNode( Abc_Aig_t * pMan, Abc_Obj_t * pOld );
+extern ABC_DLL void               Abc_AigDeleteNodeInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld );
+
 extern ABC_DLL void               Abc_AigRehash( Abc_Aig_t * pMan );
 extern ABC_DLL int                Abc_AigNodeHasComplFanoutEdge( Abc_Obj_t * pNode );
 extern ABC_DLL int                Abc_AigNodeHasComplFanoutEdgeTrav( Abc_Obj_t * pNode );

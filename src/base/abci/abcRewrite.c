@@ -75,7 +75,10 @@ int Abc_NtkRewrite( Abc_Ntk_t * pNtk, int fUpdateLevel, int fUseZeros, int fVerb
     assert( Abc_NtkIsStrash(pNtk) );
     // cleanup the AIG
      
-    Abc_AigCleanup((Abc_Aig_t *)pNtk->pManFunc);
+    // Abc_AigCleanup((Abc_Aig_t *)pNtk->pManFunc);
+    Abc_AigCleanupInc((Abc_Aig_t *)pNtk->pManFunc);
+
+
 /*
     {
         Vec_Vec_t * vParts;

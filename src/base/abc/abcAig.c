@@ -931,6 +931,39 @@ int Abc_AigReplace( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int fU
 
 /**Function*************************************************************
 
+  Synopsis    [Performs internal cleanup step.]
+
+  Description []
+               
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+int Abc_AigCleanupInc( Abc_Aig_t * pMan )
+{
+    Vec_Ptr_t * vDangles;
+    Abc_Obj_t * pAnd;
+    int i, nNodesOld;
+//    printf( "Strash0 = %d.  Strash1 = %d.  Strash100 = %d.  StrashM = %d.\n", 
+//        pMan->nStrash0, pMan->nStrash1, pMan->nStrash5, pMan->nStrash2 );
+    nNodesOld = pMan->nEntries;
+    // collect the AND nodes that do not fanout
+    vDangles = Vec_PtrAlloc( 100 );
+    for ( i = 0; i < pMan->nBins; i++ )
+        Abc_AigBinForEachEntry( pMan->pBins[i], pAnd )
+            if ( Abc_ObjFanoutNum(pAnd) == 0 )
+                Vec_PtrPush( vDangles, pAnd );
+    // process the dangling nodes and their MFFCs
+    Vec_PtrForEachEntry( Abc_Obj_t *, vDangles, pAnd, i )
+        Abc_AigDeleteNodeInc( pMan, pAnd );
+    Vec_PtrFree( vDangles );
+    return nNodesOld - pMan->nEntries;
+}
+
+
+/**Function*************************************************************
+
   Synopsis    [Performs internal replacement step.]
 
   Description []
@@ -1254,12 +1287,12 @@ void Abc_AigUpdateLevelR_int( Abc_Aig_t * pMan )
 }
 
   
-void Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan, int candidateLevel, int flag ){  
+void Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan, int candidateLevel, int finalUpdate ){  
     // if current level is larger or equal to the minimum level, perform batch update  
     if (candidateLevel >= pMan->nLevelMin)
         Abc_AigUpdateLevelIncR_int( pMan );
     // if flag is true, perform final update
-    if (flag)
+    if (finalUpdate)
         Abc_AigUpdateLevelInc_int( pMan );
     // reset the minimum level
     pMan->nLevelMin = ABC_INFINITY;
@@ -1284,7 +1317,7 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
     Vec_PtrPush( pMan->vStackReplaceOld, pOld );
     Vec_PtrPush( pMan->vStackReplaceNew, pNew );
     
-    int delta_level = Abc_ObjLevel(Abc_ObjRegular(pNew)) - Abc_ObjLevel(pOld);
+    // int delta_level = Abc_ObjLevel(Abc_ObjRegular(pNew)) - Abc_ObjLevel(pOld);
     if ( pMan->pNtkAig->vLevelsR ) {
         if (Abc_ObjLevel(Abc_ObjRegular(pNew)) - Abc_ObjLevel(pOld) > 1)
         printf("##replace old %d with level %d  New Node %d with level %d\n", Abc_ObjId(pOld), Abc_ObjLevel(pOld), Abc_ObjRegular(pNew)->Id, Abc_ObjLevel(Abc_ObjRegular(pNew)));
