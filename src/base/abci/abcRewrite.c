@@ -118,6 +118,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
 
     Abc_NtkForEachNode( pNtk, pNode, i )
     {
+        pNode->fUpdated = 1;
         // if (i > 25) continue;
         Extra_ProgressBarUpdate( pProgress, i, NULL );
         // stop if all nodes have been tried once
@@ -155,7 +156,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         // complement the FF if needed
         if ( fCompl ) Dec_GraphComplement( pGraph );
 clk = Abc_Clock();
-if(i==54017){  
+if(i==705082){  
         if ( !Dec_GraphUpdateNetwork( pNode, pGraph, fUpdateLevel, nGain ) )
         {
             RetValue = -1;

@@ -152,8 +152,10 @@ struct Abc_Obj_t_     // 48/72 bytes (32-bits/64-bits)
       int             iTemp;
       float           dTemp; }; 
     float             pr;           // pagerank score of the node 
-    float             ppr;          // previous pagerank score of the node
+    float             ppr;          // previous pagerank score of the node 
+    unsigned          fUpdated:  1;  // marks the node is updated
 };
+
 
    
 struct Abc_Ntk_t_ 

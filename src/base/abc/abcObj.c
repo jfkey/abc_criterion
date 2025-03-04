@@ -62,6 +62,7 @@ Abc_Obj_t * Abc_ObjAlloc( Abc_Ntk_t * pNtk, Abc_ObjType_t Type )
     pObj->Id   = -1;
     pObj->ppr = 0;
     pObj->pr = 0;
+    pObj->fUpdated = 0;
     return pObj;
 }
 

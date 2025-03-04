@@ -1289,7 +1289,8 @@ void Abc_AigUpdateLevelR_int( Abc_Aig_t * pMan )
   
 void Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan, int candidateLevel, int finalUpdate ){  
     // if current level is larger or equal to the minimum level, perform batch update  
-    return; 
+  
+    abctime clk = Abc_Clock();
     if (candidateLevel >= pMan->nLevelMin)
         Abc_AigUpdateLevelIncR_int( pMan );
     // if flag is true, perform final update
@@ -1297,6 +1298,8 @@ void Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan, int candidateLevel, int final
         Abc_AigUpdateLevelInc_int( pMan );
     // reset the minimum level
     pMan->nLevelMin = ABC_INFINITY;
+    global_update_time += Abc_Clock() - clk;
+
     return; 
 }
 
@@ -1356,8 +1359,8 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
     if ( fUpdateLevel )
     {
         // using lazy updates to maintain the level structure  (batch updates) 
-        Abc_AigUpdateLevelInc_int( pMan );
-        if ( pMan->pNtkAig->vLevelsR )  
+        // Abc_AigUpdateLevelInc_int( pMan );
+        if ( pMan->pNtkAig->vLevelsR && num_updates >= 1 && P_QueSize(pMan->vQueueR) >= 0  )  
             Abc_AigUpdateLevelIncR_int( pMan );
     } 
     
@@ -1395,18 +1398,19 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
         {
             pFanin1 = Abc_ObjRegular( pNew );
             if ( pFanin1->fMarkB )
-                pFanin1 = 0; 
-            if ( fUpdateLevel && pMan->pNtkAig->vLevelsR )
-            {
-                Abc_ObjSetReverseLevel( pFanin1, Abc_ObjReverseLevel(pOld) );
-                assert( pFanin1->fMarkB == 0 );
-                if ( !Abc_ObjIsCi(pFanin1) )
-                {
-                    pFanin1->fMarkB = 1;
-                    // Vec_VecPush( pMan->vLevelsR, Abc_ObjReverseLevel(pFanin1), pFanin1 );
-                    P_QuePush(pMan->vQueueR, pFanin1, 1.0 * Abc_ObjReverseLevel(pFanin1)); 
-                }
-            }
+                pFanin1->fMarkB = 0; 
+            // Lemma . 
+            // if ( fUpdateLevel && pMan->pNtkAig->vLevelsR )
+            // {
+            //     Abc_ObjSetReverseLevel( pFanin1, Abc_ObjReverseLevel(pOld) );
+            //     assert( pFanin1->fMarkB == 0 );
+            //     if ( !Abc_ObjIsCi(pFanin1) )
+            //     {
+            //         pFanin1->fMarkB = 1;
+            //         // Vec_VecPush( pMan->vLevelsR, Abc_ObjReverseLevel(pFanin1), pFanin1 );
+            //         P_QuePush(pMan->vQueueR, pFanin1, 1.0 * Abc_ObjReverseLevel(pFanin1)); 
+            //     }
+            // }
             Abc_ObjPatchFanin( pFanout, pOld, pNew );            
             continue;
         }
@@ -1457,7 +1461,7 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
                 P_QuePush(pMan->vQueue, pFanout, 1.0 * pFanout->Level); 
             }  
             if (pMan->pNtkAig->vLevelsR){
-                if (pFanout->fMarkB == 0){  
+                if (pFanout->fMarkB == 0 && pFanout->fUpdated == 0){  
                     pFanout->fMarkB = 1;
                     P_QuePush(pMan->vQueueR, pFanout, 1.0 * Abc_ObjReverseLevel(pFanout)); 
                 }
@@ -1550,10 +1554,14 @@ void Abc_AigUpdateLevelIncR_int( Abc_Aig_t * pMan )
                 continue;
             // get the new reverse level of this fanin
             LevelNew = 0;
+            
+            if (pFanin->fUpdated) // 
+                continue;
             Abc_ObjForEachFanout( pFanin, pFanout, j )
                 if ( LevelNew < Abc_ObjReverseLevel(pFanout) )
                     LevelNew = Abc_ObjReverseLevel(pFanout);
             LevelNew += 1;
+           
             if (  Abc_ObjReverseLevel(pFanin) == LevelNew  ) // no change
                 continue;
             // update the reverse level
