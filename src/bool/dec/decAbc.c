@@ -211,8 +211,11 @@ int Dec_GraphToNetworkCount( Abc_Obj_t * pRoot, Dec_Graph_t * pGraph, int NodeMa
 
         // lazy update strategy
         // if current level is larger or equal to the minimum level, perform batch update  
-        if ( ABC_INFINITY != LevelMax )
+        if ( ABC_INFINITY != LevelMax ){
             Abc_AigUpdateLevel_Trigger( pMan, LevelNew, 0);
+            LevelNew = 1 + Abc_MaxInt( pNode0->Level, pNode1->Level );
+        }
+            
 
         if ( pAnd )
         {

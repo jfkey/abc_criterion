@@ -1289,6 +1289,7 @@ void Abc_AigUpdateLevelR_int( Abc_Aig_t * pMan )
   
 void Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan, int candidateLevel, int finalUpdate ){  
     // if current level is larger or equal to the minimum level, perform batch update  
+    return; 
     if (candidateLevel >= pMan->nLevelMin)
         Abc_AigUpdateLevelIncR_int( pMan );
     // if flag is true, perform final update
@@ -1301,7 +1302,7 @@ void Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan, int candidateLevel, int final
 
 /**Function*************************************************************
 
-  Synopsis    [Replaces one AIG node by the other, from the ]
+  Synopsis    [Replaces one AIG node by the other, from the view of incremental graph computation ]
 
   Description []
                
@@ -1338,8 +1339,8 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
         pOld = (Abc_Obj_t *)Vec_PtrPop( pMan->vStackReplaceOld );
         pNew = (Abc_Obj_t *)Vec_PtrPop( pMan->vStackReplaceNew );
 
-        if ( Abc_ObjLevel(pNew) < pMan->nLevelMin )
-            pMan->nLevelMin = Abc_ObjLevel(pNew);
+        // if ( Abc_ObjLevel(pNew) < pMan->nLevelMin )
+        //     pMan->nLevelMin = Abc_ObjLevel(pNew);
         if ( Abc_ObjLevel(pOld) < pMan->nLevelMin )
             pMan->nLevelMin = Abc_ObjLevel(pOld);
 
@@ -1355,7 +1356,7 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
     if ( fUpdateLevel )
     {
         // using lazy updates to maintain the level structure  (batch updates) 
-        // Abc_AigUpdateLevelInc_int( pMan );
+        Abc_AigUpdateLevelInc_int( pMan );
         if ( pMan->pNtkAig->vLevelsR )  
             Abc_AigUpdateLevelIncR_int( pMan );
     } 
@@ -1370,7 +1371,8 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
 
   Synopsis    [Performs internal replacement step, with priority queue to update the level]
 
-  Description [fMarkA is used to mark the node to be updated in the level structure, fMarkB is used to mark the node to be updated in the reverse level structure]
+  Description [ 1. fMarkA is used to mark the node to be updated in the level structure, 
+                2. fMarkB is used to mark the node to be updated in the reverse level structure]
                
   SideEffects []
 
@@ -1420,10 +1422,8 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
         // check if the node with these fanins exists
         if ( (pFanoutNew = Abc_AigAndLookup( pMan, pFanin1, pFanin2 )) )
         { // such node exists (it may be a constant)
-            // schedule replacement of the old fanout by the new fanout
-            if (Abc_ObjLevel(pFanoutNew) < pMan->nLevelMin)
-                pMan->nLevelMin = Abc_ObjLevel(pFanoutNew);
-            printf("## new fanout has exist\n");
+            // schedule replacement of the old fanout by the new fanout 
+            printf("## new fanout has exist \t ");
             Vec_PtrPush( pMan->vStackReplaceOld, pFanout );
             Vec_PtrPush( pMan->vStackReplaceNew, pFanoutNew );
             continue;
@@ -1482,6 +1482,8 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
     // if the node has no fanouts left, remove its MFFC
     if ( Abc_ObjFanoutNum(pOld) == 0 )
         Abc_AigDeleteNodeInc( pMan, pOld );
+    else 
+        printf("## old fanout is not deleted\n");
 }
 
 
@@ -1498,7 +1500,6 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
 void Abc_AigUpdateLevelInc_int( Abc_Aig_t * pMan )
 {
     Abc_Obj_t * pNode, * pFanout;
-    Vec_Ptr_t * vVec;
     int LevelNew, v;
 
     // using priority queue to update the level
@@ -1534,7 +1535,7 @@ void Abc_AigUpdateLevelInc_int( Abc_Aig_t * pMan )
 void Abc_AigUpdateLevelIncR_int( Abc_Aig_t * pMan )
 {
     Abc_Obj_t * pNode, * pFanin, * pFanout;
-    int LevelNew, i, j,  v;
+    int LevelNew, j, v;
 
     // using priority queue to update the level
     while (P_QueSize(pMan->vQueueR) > 0){
