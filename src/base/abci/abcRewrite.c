@@ -156,7 +156,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         // complement the FF if needed
         if ( fCompl ) Dec_GraphComplement( pGraph );
 clk = Abc_Clock();
-if(i==705082){  
+if(Abc_ObjId(pNode) ==32192){  
         if ( !Dec_GraphUpdateNetwork( pNode, pGraph, fUpdateLevel, nGain ) )
         {
             RetValue = -1;
