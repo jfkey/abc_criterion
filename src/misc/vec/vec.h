@@ -39,6 +39,7 @@
 #include "vecMem.h"
 #include "vecWec.h"
 #include "pQue.h"
+#include "listPtr.h"
 
 ////////////////////////////////////////////////////////////////////////
 ///                      MACRO DEFINITIONS                           ///

@@ -420,7 +420,7 @@ int Bnd_ManCheckBound( Gia_Man_t * p, int fVerbose )
         else if ( Gia_ObjFaninNum( p, pObj ) >= 1 )
         {
             Vec_IntSetEntry( vPath, Gia_ObjId( p, Gia_ObjFanin0( pObj ) ), Vec_IntEntry( vPath, Gia_ObjId(p, Gia_ObjFanin0( pObj ) ) ) | path );
-            if ( Gia_ObjFaninNum( p, pObj ) >= 2 )
+            if ( Gia_ObjFaninNum( p, pObj )  )
             {
                 assert( Gia_ObjFaninNum( p, pObj ) <= 2  );
                 Vec_IntSetEntry( vPath, Gia_ObjId( p, Gia_ObjFanin1( pObj ) ), Vec_IntEntry( vPath, Gia_ObjId(p, Gia_ObjFanin1( pObj ) ) ) | path );

@@ -82,9 +82,9 @@ static inline void P_QueFree(P_Que_t * p)
     free(p->pPriorities);
     free(p);
 }
+ 
 
 /**Function*************************************************************
-
   Synopsis    [Returns the size of the priority queue.]
 
   Description []
@@ -213,6 +213,40 @@ static inline void * P_QueTop(P_Que_t * p)
 static inline float P_QueTopPriority(P_Que_t * p)
 {
     return p->nSize > 0 ? p->pPriorities[0] : -1.0f; // Assuming negative priority isn't valid
+}
+
+/**Function*************************************************************
+
+  Synopsis    [Clears all elements from the priority queue.]
+
+  Description [Removes all elements while maintaining allocated memory.]
+               
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+static inline void P_QueClear(P_Que_t * p)
+{
+    assert(p != NULL);
+    p->nSize = 0;
+}
+
+/**Function*************************************************************
+
+  Synopsis    [Returns 1 if the priority queue is empty, 0 otherwise.]
+
+  Description []
+               
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+static inline int P_QueIsEmpty(P_Que_t * p)
+{
+    assert(p != NULL);
+    return p->nSize == 0;
 }
 
 ABC_NAMESPACE_HEADER_END

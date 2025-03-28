@@ -2,7 +2,7 @@
 
 # run abc for each file in list
 # bash run_abc.sh <path_abc> <path_benchmark> <timeout> <path_lib>
-# eg: 
+# eg: bash run_abc.sh /home/liujunfeng/NewCriterion/abc_criterion/abc_criterion/build/abc  /home/liujunfeng/benchmarks/larger_aig/sim-LSV_exp/benchmarks_dc2syn2/ 1000m
 
  
 ####################################################################
@@ -16,7 +16,7 @@ touch "$log"
 #echo "name, command, input, output, lat, gates, edge, area, delay, lev, stime_gates, stime_gates%, stime_cap(ff), stime_cap%, stime_Area, stime_Area%, stime_Delay(ps), stime_Delay%, cut_time, delay_time, total_time" >> $csv
 
 files=$(find "$2" -name "*.aig")
-# files=("dft.aig" "netcard.aig" "leon3mp.aig" "leon2.aig" "leon3_opt.aig" "leon3.aig")
+# files=("/home/liujunfeng/benchmarks/mtm/sixteen.aig")
 
 for element in ${files[@]}
 do

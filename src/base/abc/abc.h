@@ -153,7 +153,8 @@ struct Abc_Obj_t_     // 48/72 bytes (32-bits/64-bits)
       float           dTemp; }; 
     float             pr;           // pagerank score of the node 
     float             ppr;          // previous pagerank score of the node 
-    unsigned          fUpdated:  1;  // marks the node is updated
+    unsigned          fHandled:  1;  // marks the node is handled
+    List_Ptr_Node_t * oLNode;        // pointer to the node in the ordered list
 };
 
 
@@ -569,6 +570,7 @@ extern ABC_DLL float               Abc_NtkPathRank( Abc_Ntk_t * pNtk );
 extern ABC_DLL float               Abc_NtkMaxPR( Abc_Ntk_t * pNtk ); 
 // lazy update strategy
 extern ABC_DLL void                Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan, int candidateLevel, int finalUpdate );
+extern ABC_DLL void                Abc_AigUpdateLevel_Lazy(Abc_Obj_t * pNode );
 
 extern ABC_DLL Abc_Obj_t *        Abc_AigConst1( Abc_Ntk_t * pNtk );
 extern ABC_DLL Abc_Obj_t *        Abc_AigAnd( Abc_Aig_t * pMan, Abc_Obj_t * p0, Abc_Obj_t * p1 );

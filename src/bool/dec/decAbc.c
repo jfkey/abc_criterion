@@ -176,8 +176,9 @@ int Dec_GraphToNetworkCount( Abc_Obj_t * pRoot, Dec_Graph_t * pGraph, int NodeMa
     if ( Dec_GraphIsConst(pGraph) || Dec_GraphIsVar(pGraph) )
         return 0;
     // set the levels of the leaves
-    Dec_GraphForEachLeaf( pGraph, pNode, i )
+    Dec_GraphForEachLeaf( pGraph, pNode, i )  
         pNode->Level = Abc_ObjRegular((Abc_Obj_t *)pNode->pFunc)->Level;
+ 
     // compute the AIG size after adding the internal nodes
     Counter = 0;
     Dec_GraphForEachNode( pGraph, pNode, i )
@@ -201,7 +202,7 @@ int Dec_GraphToNetworkCount( Abc_Obj_t * pRoot, Dec_Graph_t * pGraph, int NodeMa
         else
             pAnd = NULL;
         // count the number of added nodes
-        if ( pAnd == NULL || Abc_NodeIsTravIdCurrent(Abc_ObjRegular(pAnd)) )
+        if ( pAnd == NULL || Abc_NodeIsTravIdCurrent(Abc_ObjRegular(pAnd)) ) 
         {
             if ( ++Counter > NodeMax )
                 return -1;
@@ -210,11 +211,11 @@ int Dec_GraphToNetworkCount( Abc_Obj_t * pRoot, Dec_Graph_t * pGraph, int NodeMa
         LevelNew = 1 + Abc_MaxInt( pNode0->Level, pNode1->Level );
 
         // lazy update strategy
-        // if current level is larger or equal to the minimum level, perform batch update  
-        if ( ABC_INFINITY != LevelMax ){
-            Abc_AigUpdateLevel_Trigger( pMan, LevelNew, 0);
-            LevelNew = 1 + Abc_MaxInt( pNode0->Level, pNode1->Level );
-        }
+        // // if current level is larger or equal to the minimum level, perform batch update  
+        // if ( ABC_INFINITY != LevelMax ){
+        //     Abc_AigUpdateLevel_Trigger( pMan, LevelNew, 0);
+        //     LevelNew = 1 + Abc_MaxInt( pNode0->Level, pNode1->Level );
+        // }
             
 
         if ( pAnd )

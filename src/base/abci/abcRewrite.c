@@ -21,11 +21,14 @@
 #include "base/abc/abc.h"
 #include "opt/rwr/rwr.h"
 #include "bool/dec/dec.h"
+#include "base/abc/abcAig.c"
 
 
 ABC_NAMESPACE_IMPL_START
 
-extern abctime global_update_time;
+extern abctime global_update_time; 
+extern int global_level_updates;
+extern int global_reverse_updates;
 
 /*
     The ideas realized in this package are inspired by the paper:
@@ -48,6 +51,75 @@ extern void  Abc_PlaceUpdate( Vec_Ptr_t * vAddedCells, Vec_Ptr_t * vUpdatedNets 
 ////////////////////////////////////////////////////////////////////////
 ///                     FUNCTION DEFINITIONS                         ///
 ////////////////////////////////////////////////////////////////////////
+
+/**Function*************************************************************
+
+  Synopsis    [Updates the topological order of the nodes in the AIG.]
+
+  Description [Note that: the first node in the affected vector is pTo: with the largest order
+  the other nodes in the affect vector are sorted by topological order (DFS)
+  ]
+               
+  SideEffects []
+
+  SeeAlso     []
+***********************************************************************/
+int Abc_AigUpdateTopoAff( Abc_Aig_t * pMan, List_Ptr_t * oList ){
+    
+    Vec_Ptr_t * vAffTmp; 
+    Abc_Obj_t * pNode, * pNodeFirst;
+    List_Ptr_Node_t * oNodeFirst;
+    int i, j; 
+   // verify input parameters
+    if ( pMan == NULL || oList == NULL )
+        return 0;
+    if ( pMan->vTopoAff == NULL || Vec_PtrSize(pMan->vTopoAff) == 0 )
+        return 1; // nothing to update
+  
+    Vec_PtrForEachEntry(Vec_Ptr_t*, pMan->vTopoAff, vAffTmp, i){
+        // verify affected set
+        if ( vAffTmp == NULL )
+            continue;
+        assert(Vec_PtrSize(vAffTmp) >= 1); 
+        // get the first node in the affected vector, 
+        // and the first node is with correct order 
+        pNodeFirst = Vec_PtrEntry(vAffTmp, 0);
+        oNodeFirst = pNodeFirst->oLNode;
+
+        if (pNodeFirst->oLNode == NULL)
+           continue;
+        assert(!pNodeFirst -> fHandled);   
+        
+        List_Ptr_Node_t * newOrder;
+        // iterate over the nodes in the affected vector in reverse order
+        Vec_PtrForEachEntryReverse(Abc_Obj_t*, vAffTmp, pNode, j){
+            if (pNode == NULL) 
+                return 0; 
+            if (j == 0) 
+                continue;
+            // skip the nodes that are not in the old order 
+            if (pNode -> oLNode == NULL) 
+                continue;
+            
+            // create new order for the nodes in AFF
+            newOrder = List_PtrInsertBefore(oList, oNodeFirst, pNode);
+            assert(newOrder != NULL);
+            // remove the node from the old order
+            List_PtrRemoveNode(oList, pNode->oLNode);
+            // update the node's order
+            pNode->oLNode = newOrder;
+            oNodeFirst = newOrder;  
+            // printf("#######pNode->Id = %d\n", pNode->Id);
+        }
+    }
+    // free the vTopoAff
+    while(Vec_PtrSize(pMan->vTopoAff) > 0){
+        Vec_Ptr_t * vAffTmp = Vec_PtrPop(pMan->vTopoAff);
+        Vec_PtrFree(vAffTmp);
+    }
+    
+    return 1; 
+}
 
 /**Function*************************************************************
 
@@ -77,7 +149,9 @@ int Abc_NtkRewrite( Abc_Ntk_t * pNtk, int fUpdateLevel, int fUseZeros, int fVerb
      
     // Abc_AigCleanup((Abc_Aig_t *)pNtk->pManFunc);
     Abc_AigCleanupInc((Abc_Aig_t *)pNtk->pManFunc);
-
+    global_level_updates = 0;
+    global_reverse_updates = 0; 
+    global_update_time = 0;
 
 /*
     {
@@ -114,12 +188,29 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
     pManRwr->nNodesBeg = Abc_NtkNodeNum(pNtk);
     nNodes = Abc_NtkObjNumMax(pNtk);
     pProgress = Extra_ProgressBarStart( stdout, nNodes );
- 
+    
+    // initialize the linked list of nodes
+    Abc_Aig_t * pMan = (Abc_Aig_t *)pNtk->pManFunc;
+    List_Ptr_Node_t * oLNode; 
+    List_Ptr_t * oList = pMan->oList; 
+    
+    Abc_NtkForEachNode( pNtk, pNode, i ){
+        oLNode = List_PtrPushBack( oList, pNode );
+        assert(oLNode != NULL);
+        pNode ->oLNode = oLNode; 
+    }
+    pMan -> oList = oList;  
 
-    Abc_NtkForEachNode( pNtk, pNode, i )
-    {
-        pNode->fUpdated = 1;
-        // if (i > 25) continue;
+    // reset the iterator, i is the index of the node to be rewritten
+    i = -1; 
+    List_Ptr_Iterator_t * oLIter = (List_Ptr_Iterator_t*)ABC_ALLOC(List_Ptr_Iterator_t, 1);
+   
+    List_PtrForEach(List_Ptr_t*, oList, pNode, oLIter ){ 
+        i ++;  
+        // different from the condition in Abc_NtkForEachNode
+        // this condition is used to avoid the nodes that may be deleted not in the nework 
+        // we delete the node from AIG but do not remove the order from the linked list 
+        if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
         Extra_ProgressBarUpdate( pProgress, i, NULL );
         // stop if all nodes have been tried once
         if ( i >= nNodes )
@@ -131,17 +222,70 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         if ( Abc_ObjFanoutNum(pNode) > 1000 )
             continue;
 
-
-         // lazy update strategy
-        // if current level is larger or equal to the minimum level, perform batch update  
+        if (pNode->fHandled){
+            printf("Node %s is handled\n", Abc_ObjName(pNode));
+            continue;
+        }
+        // assert the node's fanin has been handled
+        Abc_Obj_t * pFanin0 = Abc_ObjFanin0(pNode); 
+        Abc_Obj_t * pFanin1 = Abc_ObjFanin1(pNode);         
+        if (pFanin0 != NULL) 
+        if (!Abc_ObjIsCi(pFanin0) && pFanin0->oLNode != NULL)
+            assert(pFanin0->fHandled);
+        if (pFanin1 != NULL)
+        if (!Abc_ObjIsCi(pFanin1) && pFanin1->oLNode != NULL)
+            assert(pFanin1->fHandled);
+ 
+          
+        // Abc_NodeSetTravIdCurrent(pNode);
+        clk = Abc_Clock();
         if (fUpdateLevel)
-            Abc_AigUpdateLevel_Trigger((Abc_Aig_t *)pNtk->pManFunc, Abc_ObjLevel(pNode), 0);
-    
+            if ( !pNode->fHandled )  
+                Abc_AigUpdateLevel_Lazy( pNode);
+        global_update_time += Abc_Clock() - clk;   
+        printf("current node %d, level = %d\n", pNode->Id, pNode->Level);
+       if ( pNode ->Id == 15179){
+        printf("current node %d, level = %d\n", pNode->Id, pNode->Level);
+       }
+
+    //     // get the Node with Id = 467
+    //    Abc_Obj_t * pNode467 = Abc_NtkObj(pNtk, 6408);
+    //     if (pNode467 != NULL && i < 1000){
+    //         printf("current Pnode %d pNode467 (%d, level = %d), fanin0 = %d level = %d, fanin1 = %d level = %d\n", pNode->Id,pNode467->Id, Abc_ObjLevel(pNode467), Abc_ObjFanin0(pNode467)->Id, Abc_ObjLevel(Abc_ObjFanin0(pNode467)), Abc_ObjFanin1(pNode467)->Id, Abc_ObjLevel(Abc_ObjFanin1(pNode467)));
+    //     }
+
+    //     if (pNode ->Id == 6407) {
+    //         printf("handle node %d\n", pNode->Id);
+    //     }
+    //     if (pNode ->Id == 6456){ 
+    //         printf("handle node %d\n", pNode->Id);
+    //     }
+
+    //     if (pNode ->Id == 541){
+    //         printf("handle node %d\n", pNode->Id);
+    //     }
+    //     Abc_Obj_t * pNode465 = Abc_NtkObj(pNtk, 465);
+        // if (pNode465 != NULL){
+        //     printf("handle node %d\n", pNode465->Id);
+        // }
+        // if (pNtk->vObjs->nSize > 18969 && i < 1000){
+        //     Abc_Obj_t * pNode720 = Abc_NtkObj(pNtk, 18969);
+        //     if (pNode720 != NULL){
+        //         printf("current node %d,  pNode 18969 level = %d\n", pNode->Id, Abc_ObjLevel(pNode720));
+        //     }
+        // }
+         
         // for each cut, try to resynthesize it
         nGain = Rwr_NodeRewrite( pManRwr, pManCut, pNode, fUpdateLevel, fUseZeros, fPlaceEnable );
-        if ( !(nGain > 0 || (nGain == 0 && fUseZeros)) )
+        // mark the node as updated 
+       
+
+        if ( !(nGain > 0 || (nGain == 0 && fUseZeros)) ){
+            if (fUpdateLevel)  pNode->fHandled = 1;
             continue;
+        } 
         // if we end up here, a rewriting step is accepted
+         
 
         // get hold of the new subgraph to be added to the AIG
         pGraph = (Dec_Graph_t *)Rwr_ManReadDecs(pManRwr);
@@ -151,39 +295,54 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         if ( fPlaceEnable )
             Abc_AigUpdateReset( (Abc_Aig_t *)pNtk->pManFunc );
 
-   
+    
      
         // complement the FF if needed
         if ( fCompl ) Dec_GraphComplement( pGraph );
-clk = Abc_Clock();
-if(Abc_ObjId(pNode) ==32192){  
-        if ( !Dec_GraphUpdateNetwork( pNode, pGraph, fUpdateLevel, nGain ) )
-        {
-            RetValue = -1;
-            break;
-        }
-} else {
+clk = Abc_Clock(); 
     if ( !Dec_GraphUpdateNetwork( pNode, pGraph, fUpdateLevel, nGain ) )
         {
+            if (fUpdateLevel)  pNode->fHandled = 1;
             RetValue = -1;
             break;
         }
-}
+        pNode->fHandled = 1;
 Rwr_ManAddTimeUpdate( pManRwr, Abc_Clock() - clk );
     if (fCompl) Dec_GraphComplement(pGraph);
-       
         // use the array of changed nodes to update placement
 //        if ( fPlaceEnable )
 //            Abc_PlaceUpdate( vAddedCells, vUpdatedNets );
-    }
     
-    // perform final update
-    if (fUpdateLevel)
-        Abc_AigUpdateLevel_Trigger((Abc_Aig_t *)pNtk->pManFunc, Abc_ObjLevel(pNode), 1);
-    
+        if ( fUpdateLevel ){
+            if (!Abc_AigUpdateTopoAff( (Abc_Aig_t *)pNtk->pManFunc, oList )){
+                RetValue = -1; 
+                break; 
+            } 
+        } 
+    } 
     Extra_ProgressBarStop( pProgress );
-    if ( JF_DEBUG_REWRITE )
-        ABC_PRT( "#############rewrite update level time elapsed", global_update_time );   
+    
+    ABC_PRT( "#############rewrite update level time elapsed", global_update_time );   
+    printf("#############rewrite update level num %d\n", global_level_updates);   
+    printf("#############rewrite  update reverse level num %d\n", global_reverse_updates);   
+
+//  List_PtrForEach(List_Ptr_t*, oList, pNode, oLIter ){
+//      if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
+//         Extra_ProgressBarUpdate( pProgress, i, NULL );
+//         // stop if all nodes have been tried once
+//         if ( i >= nNodes )
+//             break;
+//         // skip persistant nodes
+//         if ( Abc_NodeIsPersistant(pNode) )
+//             continue;
+//         // skip the nodes with many fanouts
+//         if ( Abc_ObjFanoutNum(pNode) > 1000 )
+//             continue;
+//         if (!pNode->fHandled) 
+//         printf("Node %s is not handled\n", Abc_ObjName(pNode)); 
+//  }
+
+
 
 Rwr_ManAddTimeTotal( pManRwr, Abc_Clock() - clkStart );
     // print stats
@@ -197,6 +356,16 @@ Rwr_ManAddTimeTotal( pManRwr, Abc_Clock() - clkStart );
     Rwr_ManStop( pManRwr );
     Cut_ManStop( pManCut );
     pNtk->pManCut = NULL;
+
+//Abc_NtkLevel( pNtk );
+
+Abc_Obj_t * pObj;
+ Abc_NtkForEachNode( pNtk, pObj, i )
+    { 
+        if ( pObj->Level != 1 + (unsigned)Abc_MaxInt( Abc_ObjFanin0(pObj)->Level, Abc_ObjFanin1(pObj)->Level ) )
+            printf( "Abc_AigCheck: Node \"%s\" has level that does not agree with the fanin levels.\n", Abc_ObjName(pObj) );
+        
+    }
 
     // start placement package
 //    if ( fPlaceEnable )
@@ -228,6 +397,7 @@ Rwr_ManAddTimeTotal( pManRwr, Abc_Clock() - clkStart );
     }
     return RetValue;
 }
+ 
 
 
 /**Function*************************************************************

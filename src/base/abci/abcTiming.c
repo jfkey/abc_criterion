@@ -1305,7 +1305,7 @@ void Abc_NtkStopReverseLevels( Abc_Ntk_t * pNtk )
     Vec_IntFree( pNtk->vLevelsR );
     pNtk->vLevelsR = NULL;
     pNtk->LevelMax = 0;
-
+       
 }
 
 /**Function*************************************************************

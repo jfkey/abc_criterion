@@ -1405,7 +1405,7 @@ void Abc_NtkDelete( Abc_Ntk_t * pNtk )
 //        assert( pObj->fMarkB == 0 );
 //        assert( pObj->fMarkC == 0 );
         if ( !fWarning && (pObj->fMarkA || pObj->fMarkB || pObj->fMarkC) )
-            { printf( "Flags A, B, or C are not zero.\n" ), fWarning = 1; }
+            { printf( "Flags A, B, or C are not zero.\n" ), fWarning = 1; }  
     }
     // free the nodes
     if ( pNtk->pMmStep == NULL )
