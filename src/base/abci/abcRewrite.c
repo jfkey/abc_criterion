@@ -131,9 +131,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         pNode ->oLNode = oLNode; 
     }
 
-    // pMan -> oList = oList;  
-
-    // reset the iterator, i is the index of the node to be rewritten
+    
     i = -1; 
     List_Ptr_Iterator_t * oLIter = (List_Ptr_Iterator_t*)ABC_ALLOC(List_Ptr_Iterator_t, 1);
    
@@ -247,7 +245,7 @@ clk = Abc_Clock();
             RetValue = -1;
             break;
         }
-        pNode->fHandled = 1;
+        if (fUpdateLevel) pNode->fHandled = 1;
 Rwr_ManAddTimeUpdate( pManRwr, Abc_Clock() - clk );
     if (fCompl) Dec_GraphComplement(pGraph);
         // use the array of changed nodes to update placement
@@ -288,6 +286,7 @@ Rwr_ManAddTimeTotal( pManRwr, Abc_Clock() - clkStart );
         if (pNode->fHandled) pNode->fHandled = 0; 
     }
     List_PtrClear(oList);
+    ABC_FREE(oLIter);
 
  
 

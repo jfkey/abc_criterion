@@ -353,21 +353,62 @@ int Abc_NtkRefactor( Abc_Ntk_t * pNtk, int nNodeSizeMax, int nMinSaved, int nCon
     pManRef->nNodesBeg = Abc_NtkNodeNum(pNtk);
     nNodes = Abc_NtkObjNumMax(pNtk);
     pProgress = Extra_ProgressBarStart( stdout, nNodes );
-    Abc_NtkForEachNode( pNtk, pNode, i )
-    {
+
+    List_Ptr_Node_t * oLNode; 
+    List_Ptr_t * oList = Abc_AigGetOList((Abc_Aig_t *)pNtk->pManFunc);
+    oList->nSize = 0;
+    
+    Abc_NtkForEachNode( pNtk, pNode, i ){
+        oLNode = List_PtrPushBack( oList, pNode );
+        assert(oLNode != NULL);
+        pNode ->oLNode = oLNode; 
+    }
+    i = -1; 
+     List_Ptr_Iterator_t * oLIter = (List_Ptr_Iterator_t*)ABC_ALLOC(List_Ptr_Iterator_t, 1);
+   
+    List_PtrForEach(List_Ptr_t*, oList, pNode, oLIter ){ 
+        i ++;  
+        // different from the condition in Abc_NtkForEachNode
+        // this condition is used to avoid the nodes that may be deleted not in the nework 
+        // we delete the node from AIG but do not remove the order from the linked list 
+        if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
         Extra_ProgressBarUpdate( pProgress, i, NULL );
-        // skip the constant node
-//        if ( Abc_NodeIsConst(pNode) )
-//            continue;
+        
         // skip persistant nodes
-        if ( Abc_NodeIsPersistant(pNode) )
+        if ( Abc_NodeIsPersistant(pNode) ){
+            if (fUpdateLevel) pNode->fHandled = 1;
             continue;
+        }
+        
         // skip the nodes with many fanouts
-        if ( Abc_ObjFanoutNum(pNode) > 1000 )
+        if ( Abc_ObjFanoutNum(pNode) > 1000 ){
+            if (fUpdateLevel) pNode->fHandled = 1;
             continue;
+        }
         // stop if all nodes have been tried once
         if ( i >= nNodes )
             break;
+
+        if (pNode->fHandled){
+            printf("Abc_NtkRerfactor: node %d has been handled.\n", pNode->Id);
+            continue;
+        }
+        if (fUpdateLevel){
+            Abc_Obj_t * pFanin0 = Abc_ObjFanin0(pNode); 
+            Abc_Obj_t * pFanin1 = Abc_ObjFanin1(pNode);         
+            if (pFanin0 != NULL) 
+            if (!Abc_ObjIsCi(pFanin0) && pFanin0->oLNode != NULL)
+                assert(pFanin0->fHandled);
+            if (pFanin1 != NULL)
+            if (!Abc_ObjIsCi(pFanin1) && pFanin1->oLNode != NULL)
+                assert(pFanin1->fHandled);
+        
+            if ( !pNode->fHandled )  
+                Abc_AigUpdateLevel_Lazy( pNode);
+        }
+
+
+
         // compute a reconvergence-driven cut
 clk = Abc_Clock();
         vFanins = Abc_NodeFindCut( pManCut, pNode, fUseDcs );
@@ -376,22 +417,81 @@ pManRef->timeCut += Abc_Clock() - clk;
 clk = Abc_Clock();
         pFForm = Abc_NodeRefactor( pManRef, pNode, vFanins, nMinSaved, fUpdateLevel, fUseZeros, fUseDcs, fVerbose );
 pManRef->timeRes += Abc_Clock() - clk;
-        if ( pFForm == NULL )
-            continue;
-        // acceptable replacement found, update the graph
+        if ( pFForm == NULL ){
+            pNode->fHandled = 1; 
+                continue;
+            // acceptable replacement found, update the graph
+        }
 clk = Abc_Clock();
         if ( !Dec_GraphUpdateNetwork( pNode, pFForm, fUpdateLevel, pManRef->nLastGain ) )
         {
+            if (fUpdateLevel)  pNode->fHandled = 1;
             Dec_GraphFree( pFForm );
             RetValue = -1;
             break;
         }
+        if (fUpdateLevel)  pNode->fHandled = 1;
+
+        if ( fUpdateLevel ){
+            if (!Abc_AigReplaceUpdateAff( (Abc_Aig_t *)pNtk->pManFunc)){
+                RetValue = -1; 
+                break; 
+            } 
+        } 
 pManRef->timeNtk += Abc_Clock() - clk;
         Dec_GraphFree( pFForm );
+
     }
+
+
+//     Abc_NtkForEachNode( pNtk, pNode, i )
+//     {
+//         Extra_ProgressBarUpdate( pProgress, i, NULL );
+//         // skip the constant node
+// //        if ( Abc_NodeIsConst(pNode) )
+// //            continue;
+//         // skip persistant nodes
+//         if ( Abc_NodeIsPersistant(pNode) )
+//             continue;
+//         // skip the nodes with many fanouts
+//         if ( Abc_ObjFanoutNum(pNode) > 1000 )
+//             continue;
+//         // stop if all nodes have been tried once
+//         if ( i >= nNodes )
+//             break;
+//         // compute a reconvergence-driven cut
+// clk = Abc_Clock();
+//         vFanins = Abc_NodeFindCut( pManCut, pNode, fUseDcs );
+// pManRef->timeCut += Abc_Clock() - clk;
+//         // evaluate this cut
+// clk = Abc_Clock();
+//         pFForm = Abc_NodeRefactor( pManRef, pNode, vFanins, nMinSaved, fUpdateLevel, fUseZeros, fUseDcs, fVerbose );
+// pManRef->timeRes += Abc_Clock() - clk;
+//         if ( pFForm == NULL )
+//             continue;
+//         // acceptable replacement found, update the graph
+// clk = Abc_Clock();
+//         if ( !Dec_GraphUpdateNetwork( pNode, pFForm, fUpdateLevel, pManRef->nLastGain ) )
+//         {
+//             Dec_GraphFree( pFForm );
+//             RetValue = -1;
+//             break;
+//         }
+// pManRef->timeNtk += Abc_Clock() - clk;
+//         Dec_GraphFree( pFForm );
+//     }
     Extra_ProgressBarStop( pProgress );
 pManRef->timeTotal = Abc_Clock() - clkStart;
     pManRef->nNodesEnd = Abc_NtkNodeNum(pNtk);
+
+    // clear the mark of fHandled nodes
+    List_PtrForEach(List_Ptr_t*, oList, pNode, oLIter ){ 
+        if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
+
+        if (pNode->fHandled) pNode->fHandled = 0; 
+    }
+    List_PtrClear(oList);
+    ABC_FREE(oLIter);
 
     // print statistics of the manager
     if ( fVerbose )
