@@ -571,7 +571,7 @@ extern ABC_DLL float               Abc_NtkMaxPR( Abc_Ntk_t * pNtk );
 // lazy update strategy
 extern ABC_DLL void                Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan, int candidateLevel, int finalUpdate );
 extern ABC_DLL void                Abc_AigUpdateLevel_Lazy(Abc_Obj_t * pNode );
-extern ABC_DLL int                 Abc_AigUpdateTopoAff( Abc_Aig_t * pMan, List_Ptr_t * oList );
+extern ABC_DLL int                 Abc_AigReplaceUpdateAff( Abc_Aig_t * pMan);
 extern ABC_DLL List_Ptr_t *        Abc_AigGetOList(Abc_Aig_t * pMan);
 
 

@@ -134,7 +134,7 @@ static void        Abc_AigUpdateLevelR_new( Abc_Aig_t * pMan, Abc_Obj_t * pOld);
 static void        Abc_AigUpdateLevelInc_int( Abc_Aig_t * pMan );
 static void        Abc_AigUpdateLevelIncR_int( Abc_Aig_t * pMan );
 static void        Abc_AigAndDeleteInc( Abc_Aig_t * pMan, Abc_Obj_t * pThis );
-static void        Abc_AigReplaceAff_rec( Abc_Aig_t * pMan, Abc_Obj_t * pFrom, Vec_Ptr_t * vAff );
+static void        Abc_AigReplaceFindAff_rec( Abc_Aig_t * pMan, Abc_Obj_t * pFrom);
  
 
 ////////////////////////////////////////////////////////////////////////
@@ -909,17 +909,9 @@ int Abc_AigReplace( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int fU
     assert( Vec_PtrSize(pMan->vStackReplaceNew) == 0 );
     Vec_PtrPush( pMan->vStackReplaceOld, pOld );
     Vec_PtrPush( pMan->vStackReplaceNew, pNew );
-    //  if ( pMan->pNtkAig->vLevelsR ) {
-    //     printf("##replace old %d with level %d  New Node %d with level %d", Abc_ObjId(pOld), Abc_ObjLevel(pOld), Abc_ObjRegular(pNew)->Id, Abc_ObjLevel(Abc_ObjRegular(pNew)));
-    // }  
-    int delta_level = Abc_ObjLevel(Abc_ObjRegular(pNew)) - Abc_ObjLevel(pOld);
-    if ( pMan->pNtkAig->vLevelsR ) {
-        if (Abc_ObjLevel(Abc_ObjRegular(pNew)) - Abc_ObjLevel(pOld) > 1)
-        printf("##replace old %d with level %d  New Node %d with level %d\n", Abc_ObjId(pOld), Abc_ObjLevel(pOld), Abc_ObjRegular(pNew)->Id, Abc_ObjLevel(Abc_ObjRegular(pNew)));
-    }  
+    
     int num_updates = 0;
-
-
+ 
     // printf("##replace old %d new  %d\n", Abc_ObjId(pOld), Abc_ObjId(pNew));
     // int old_level = 0;
     // int old_id = Abc_ObjId(pOld);
@@ -1313,75 +1305,8 @@ void Abc_AigUpdateLevelR_int( Abc_Aig_t * pMan )
 }
 
 
-/**Function*************************************************************
-
-  Synopsis    [Updates the topological order of the nodes in the AIG.]
-
-  Description [Note that: the first node in the affected vector is pTo: with the largest order
-  the other nodes in the affect vector are sorted by topological order (DFS)
-  ]
-               
-  SideEffects []
-
-  SeeAlso     []
-***********************************************************************/
-int Abc_AigUpdateTopoAff( Abc_Aig_t * pMan, List_Ptr_t * oList ){
-    
-    Vec_Ptr_t * vAffTmp; 
-    Abc_Obj_t * pNode;
-    List_Ptr_Node_t * oNodeFirst;
-    int i, j; 
-   // verify input parameters
-    if ( pMan == NULL || oList == NULL )
-        return 0;
-    if ( pMan->vTopoAff == NULL || Vec_PtrSize(pMan->vTopoAff) == 0 )
-        return 1; // nothing to update
-  
-    Vec_PtrForEachEntryReverse(Vec_Ptr_t*, pMan->vTopoAff, vAffTmp, i){
-        // verify affected set
-        if ( vAffTmp == NULL )
-            continue;
-        assert(Vec_PtrSize(vAffTmp) >= 1); 
-        // get the first node in the affected vector, 
-        // and the first node is with correct order 
-        oNodeFirst = (List_Ptr_Node_t *)Vec_PtrEntry(vAffTmp, 0);
-        assert(oNodeFirst != NULL);
-        
-
-        List_Ptr_Node_t * newOrder;
-        // iterate over the nodes in the affected vector in reverse order
-        Vec_PtrForEachEntry(Abc_Obj_t*, vAffTmp, pNode, j){
-            if (pNode == NULL) 
-                return 0; 
-            if (j == 0) 
-                continue;
-            // skip the nodes that are not in the old order 
-            if (pNode -> oLNode == NULL) 
-                continue;
-            
-            // create new order for the nodes in AFF
-            newOrder = List_PtrInsertAfter(oList, oNodeFirst, pNode);
-            assert(newOrder != NULL);
-            // remove the node from the old order
-            List_PtrRemoveNode(oList, pNode->oLNode);
-            // update the node's order
-            pNode->oLNode = newOrder;
-            oNodeFirst = newOrder;  
-            // printf("#######pNode->Id = %d\n", pNode->Id);
-        }
-    }
-    // free the vTopoAff
-    while(Vec_PtrSize(pMan->vTopoAff) > 0){
-        Vec_Ptr_t * vAffTmp = Vec_PtrPop(pMan->vTopoAff);
-        Vec_PtrFree(vAffTmp);
-    }
-    
-    return 1; 
-}
 
 
-
-  
 void Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan, int candidateLevel, int finalUpdate ){  
     // if current level is larger or equal to the minimum level, perform batch update  
     return; 
@@ -1454,18 +1379,20 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
     assert( Vec_PtrSize(pMan->vStackReplaceNew) == 0 );
     Vec_PtrPush( pMan->vStackReplaceOld, pOld );
     Vec_PtrPush( pMan->vStackReplaceNew, pNew );
-    
-    // int delta_level = Abc_ObjLevel(Abc_ObjRegular(pNew)) - Abc_ObjLevel(pOld);
-    // if ( pMan->pNtkAig->vLevelsR ) {
-    //     if (Abc_ObjLevel(Abc_ObjRegular(pNew)) - Abc_ObjLevel(pOld) > 1)
-    //      printf("##replace old %d with level %d  New Node %d with level %d\n", Abc_ObjId(pOld), Abc_ObjLevel(pOld), Abc_ObjRegular(pNew)->Id, Abc_ObjLevel(Abc_ObjRegular(pNew)));
-    // }  
+     
     int num_updates = 0;
- 
-    // clear the priority queue
-    P_QueClear(pMan->qLevels);
-    P_QueClear(pMan->qLevelsR);     
-
+     
+    if (fUpdateLevel) {
+        // clear the priority queue
+        P_QueClear(pMan->qLevels);
+        P_QueClear(pMan->qLevelsR);
+        
+        assert(pMan->vTopoAff != NULL);
+        Vec_PtrClear(pMan->vTopoAff);
+        // the first node is the order of pTo node
+        assert(Abc_ObjRegular(pOld)->oLNode != NULL);
+        Vec_PtrPush(pMan->vTopoAff, Abc_ObjRegular(pOld)->oLNode);
+    }
     // process the replacements
     while ( Vec_PtrSize(pMan->vStackReplaceOld) )
     {
@@ -1482,7 +1409,7 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
         if ( Abc_ObjFanoutNum(pOld) == 0 )
             //return 0;
             continue;
-        Abc_AigReplaceInc_int( pMan, pOld, pNew, fUpdateLevel );
+        Abc_AigReplaceInc_int( pMan, pOld, pNew, fUpdateLevel ); 
 
     }
     // if (num_updates > 1) printf("##num updates %d node (%d)\n", num_updates, Abc_ObjId(pOld));
@@ -1490,20 +1417,13 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
     if ( fUpdateLevel )
     {
         // using lazy updates to maintain the level structure  (batch updates) 
-        //  abctime clk = Abc_Clock();
+        // abctime clk = Abc_Clock();
         // Abc_AigUpdateLevelInc_int( pMan );
         // global_update_time += Abc_Clock() - clk;
-
-        
-        abctime clk = Abc_Clock();
-        // if (num_updates > 0 && P_QueSize(pMan->qLevels) > 0)
-            // Abc_AigUpdateLevelInc_int( pMan );
-        // if ( pMan->pNtkAig->vLevelsR && num_updates > 1 && P_QueSize(pMan->vQueueR) > 0  )  
-        //     Abc_AigUpdateLevelIncR_int( pMan );
-        
-        // if ( pMan->pNtkAig->vLevelsR )  
-        //     Abc_AigUpdateLevelIncR_int( pMan );
-        
+ 
+        abctime clk = Abc_Clock(); 
+        if ( pMan->pNtkAig->vLevelsR )  
+            Abc_AigUpdateLevelIncR_int( pMan ); 
         global_update_time += Abc_Clock() - clk;
         
     }  
@@ -1515,7 +1435,66 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
 
 /**Function*************************************************************
 
-  Synopsis    [Updates the affected nodes based on the created edge]
+  Synopsis    [Updates the topological order of the nodes in the AIG.]
+
+  Description [Note that: the first node in the affected vector is pOld: with the largest order
+  the other nodes in the affect vector are sorted by topological order (DFS)
+  ]
+               
+  SideEffects []
+
+  SeeAlso     []
+***********************************************************************/
+int Abc_AigReplaceUpdateAff( Abc_Aig_t * pMan ){ 
+    Abc_Obj_t * pNode;
+    List_Ptr_Node_t * oNodeFirst, * newOrder;
+    List_Ptr_t * oList = Abc_AigGetOList(pMan);
+    int i; 
+
+    // verify input parameters
+    if ( pMan == NULL || oList == NULL )
+        return 0;
+    if ( pMan->vTopoAff == NULL || Vec_PtrSize(pMan->vTopoAff) == 0 )
+        return 1; // nothing to update
+
+    // update the topological order of the nodes in the affected vector 
+    Vec_PtrForEachEntry(Abc_Obj_t*, pMan->vTopoAff, pNode, i){ 
+        if (pNode == NULL)
+            return 0;
+       
+        // the first node is the pOld node
+        if (i == 0) {
+            oNodeFirst = (List_Ptr_Node_t *)pNode;
+            continue; 
+        }
+
+        // clean the mark
+        pNode ->fMarkC = 0;
+        // skip the nodes that are not in the old order
+        if (pNode -> oLNode == NULL)
+            continue; 
+
+        // create new order for the nodes in AFF
+        newOrder = List_PtrInsertAfter(oList, oNodeFirst, pNode);
+        assert(newOrder != NULL);
+        // remove the node from the old order
+        List_PtrRemoveNode(oList, pNode->oLNode);
+        // update the node's order
+        pNode->oLNode = newOrder;
+        oNodeFirst = newOrder;  
+    }
+    // free the nodes in vAffTmp
+    Vec_PtrErase(pMan->vTopoAff);
+    return 1; 
+}
+
+   
+
+
+
+/**Function*************************************************************
+
+  Synopsis    [Find the affected nodes based on the created edge]
 
   Description [The nodes are stored in the vector vTopoAff]
                
@@ -1524,38 +1503,20 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
   SeeAlso     []
 
 ***********************************************************************/    
-Vec_Ptr_t * Abc_AigReplaceAffectedNodes( Abc_Aig_t * pMan, Abc_Obj_t * pFrom, Abc_Obj_t * pTo ){ 
-     if (pFrom == NULL || pTo == NULL)
-        return NULL;
-    // if (Abc_ObjLevel(pFrom) < Abc_ObjLevel(pTo))
-    //     return NULL; 
+void Abc_AigReplaceFindAff( Abc_Aig_t * pMan, Abc_Obj_t * pFrom ){ 
+    assert(pFrom != NULL);
     if (Abc_ObjIsCi(pFrom) || Abc_AigNodeIsConst(pFrom)) 
-        return NULL;
-     
-    // TODO: bug here for the nodes that have been rewritten ?
+        return; 
     if (pFrom -> fHandled)
-        return NULL; 
-
-    Vec_Ptr_t * vAff;
-    vAff = Vec_PtrAlloc(100); 
-    // the first node is the pTo node
-    assert(pTo->oLNode != NULL);
-    Vec_PtrPush(vAff, pTo->oLNode);
-    Abc_AigReplaceAff_rec( pMan, pFrom, vAff); 
-    // the last node is the pFrom node, if it already has in the AIG table 
-    if ( pFrom-> oLNode != NULL)
-        Vec_PtrPush(vAff, pFrom);
-
-    // if only pTo in the vAff, we do not need to update the order of the linked list 
-    if (Vec_PtrSize(vAff) == 1){
-        Vec_PtrFree(vAff);
-        return NULL; 
-    }
-        
-    return vAff;
+        return; 
+ 
+    Abc_AigReplaceFindAff_rec( pMan, pFrom); 
+    // the last node is the pFrom node, if it already has in the AIG table     
+    Vec_PtrPush(pMan->vTopoAff, pFrom);
+    return; 
 }
 
-void  Abc_AigReplaceAff_rec( Abc_Aig_t * pMan, Abc_Obj_t * pFrom, Vec_Ptr_t * vAff ){ 
+void  Abc_AigReplaceFindAff_rec( Abc_Aig_t * pMan, Abc_Obj_t * pFrom ){ 
     Abc_Obj_t * pFanin; 
     int i; 
     Abc_ObjForEachFanin( pFrom, pFanin, i ){
@@ -1563,10 +1524,15 @@ void  Abc_AigReplaceAff_rec( Abc_Aig_t * pMan, Abc_Obj_t * pFrom, Vec_Ptr_t * vA
                 continue; 
         if (pFanin -> fHandled)
             continue;   
-        Abc_AigReplaceAff_rec( pMan, pFanin, vAff); 
-        if (pFanin -> oLNode != NULL)
-            Vec_PtrPush(vAff, pFanin);  
-    } 
+        if (pFanin -> fMarkC)
+            continue;
+        pFanin->fMarkC = 1; 
+        Abc_AigReplaceFindAff_rec( pMan, pFanin ); 
+        // push the node to the topoAff
+        // note that the nodes without oLNode may also be pushed to the topoAff
+        Vec_PtrPush(pMan->vTopoAff, pFanin);  
+    }
+    return; 
 }   
 
 
@@ -1599,6 +1565,7 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
     {
         if ( Abc_ObjIsCo(pFanout) )
         {
+            
             pFanin1 = Abc_ObjRegular( pNew );
             if ( pFanin1->fMarkB )
                 pFanin1->fMarkB = 0; 
@@ -1614,7 +1581,7 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
                 }
             }
             Abc_ObjPatchFanin( pFanout, pOld, pNew );            
-            continue;
+            continue;  
         }
         // find the old node as a fanin of this fanout
         iFanin = Vec_IntFind( &pFanout->vFanins, pOld->Id );
@@ -1636,33 +1603,20 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
         // such node does not exist - modify the old fanout node 
         // (this way the change will not propagate all the way to the COs)
         assert( Abc_ObjRegular(pFanin1) != Abc_ObjRegular(pFanin2) );             
-          
-        // record the fanout with the minimum level
-        // if (Abc_ObjLevel( Abc_ObjRegular(pFanout)) < minFanoutLevel){
-        //     minFanoutLevel = Abc_ObjLevel( Abc_ObjRegular(pFanout));
-        //     pFanoutMin = Abc_ObjRegular(pFanout);
-        //     // if (minFanoutLevel <= Abc_ObjLevel( Abc_ObjRegular(pNew))){
-        //     //     pFanoutMin = Abc_ObjRegular(pFanout);
-        //     // }
-        // }
-        if (isFirst &&  Abc_ObjLevel( Abc_ObjRegular(pNew)) > Abc_ObjLevel( Abc_ObjRegular(pOld))){
- 
-            Vec_Ptr_t * vAff = Abc_AigReplaceAffectedNodes( pMan,  Abc_ObjRegular(pNew), Abc_ObjRegular(pOld) );
-            int i = 1; 
-            Abc_Obj_t * pNodeTmp;
-            if ( vAff != NULL ){
-                Vec_PtrPush(pMan->vTopoAff, vAff);
-                printf("inserted edge from %d to %d, with node {", Abc_ObjId(Abc_ObjRegular(pNew)), Abc_ObjId(Abc_ObjRegular(pOld)));
-                Vec_PtrForEachEntry(Abc_Obj_t*, vAff, pNodeTmp, i){
-                    printf("%d ", Abc_ObjId(pNodeTmp));
-                }
-                printf("}\n");
-            }
-            
-            isFirst = 0; 
-        }
         
-
+        if (isFirst && fUpdateLevel) {
+            Abc_AigReplaceFindAff( pMan, Abc_ObjRegular(pNew));
+            // print the affected nodes
+            // Abc_Obj_t * pNodeTmp;
+            // int i = 0; 
+            // printf("\t topoAff: ");
+            // Vec_PtrForEachEntry(Abc_Obj_t*, pMan->vTopoAff, pNodeTmp, i){
+            //     printf("%d ", Abc_ObjId(pNodeTmp));
+            // }
+            // printf("\n"); 
+            isFirst = 0;
+        }
+ 
         // remove the old fanout node from the structural hashing table
         Abc_AigAndDelete( pMan, pFanout );
         // remove the fanins of the old fanout
@@ -1670,18 +1624,16 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
         // recreate the old fanout with new fanins and add it to the table
         Abc_AigAndCreateFrom( pMan, pFanin1, pFanin2, pFanout );
 
-
-            
+ 
         assert( Abc_AigNodeIsAcyclic(pFanout, pFanout) );
 
         if ( fUpdateLevel )
         {
            
-            if (pFanout->fMarkA == 0){
-                pFanout->fMarkA = 1;
-                P_QuePush(pMan->qLevels, pFanout, 1.0 * pFanout->Level); 
-            }  
-
+            // if (pFanout->fMarkA == 0){
+            //     pFanout->fMarkA = 1;
+            //     P_QuePush(pMan->qLevels, pFanout, 1.0 * pFanout->Level); 
+            // }   
             if (pMan->pNtkAig->vLevelsR){
                 if (pFanout->fMarkB == 0){   // && pFanout->fUpdated == 0
                     pFanout->fMarkB = 1;
@@ -1694,22 +1646,7 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
         Abc_ObjForEachFanout( pFanout, pFanoutFanout, v )
             if ( Abc_AigNodeIsAnd(pFanoutFanout) )
                 pFanoutFanout->fExor = Abc_NodeIsExorType(pFanoutFanout);
-    } 
-    // if (pFanoutMin != NULL){
-    //     int i; 
-    //     Abc_Obj_t * pNode; 
-    //     // update the affected nodes based on the created edge 
-    //     Vec_Ptr_t * vAff = Abc_AigReplaceAffectedNodes( pMan,  Abc_ObjRegular(pNew), pFanoutMin );
-    //     if ( vAff != NULL ){
-    //         Vec_PtrPush(pMan->vTopoAff, vAff);
-    //         printf("inserted edge from %d to %d, with node {", Abc_ObjId(Abc_ObjRegular(pNew)), Abc_ObjId(pFanout));
-    //         Vec_PtrForEachEntry(Abc_Obj_t*, vAff, pNode, i){
-    //             printf("%d ", Abc_ObjId(pNode));
-    //         }
-    //         printf("}\n");
-    //     }
-    // }
-
+    }  
     // if the node has no fanouts left, remove its MFFC
     if ( Abc_ObjFanoutNum(pOld) == 0 )
         Abc_AigDeleteNodeInc( pMan, pOld );     

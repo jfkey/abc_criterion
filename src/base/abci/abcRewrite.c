@@ -123,6 +123,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
     // Abc_Aig_t * pMan = (Abc_Aig_t *)pNtk->pManFunc;
     List_Ptr_Node_t * oLNode; 
     List_Ptr_t * oList = Abc_AigGetOList((Abc_Aig_t *)pNtk->pManFunc);
+    oList->nSize = 0;
     
     Abc_NtkForEachNode( pNtk, pNode, i ){
         oLNode = List_PtrPushBack( oList, pNode );
@@ -147,37 +148,46 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         if ( i >= nNodes )
             break;
         // skip persistant nodes
-        if ( Abc_NodeIsPersistant(pNode) )
-            continue;
-        // skip the nodes with many fanouts
-        if ( Abc_ObjFanoutNum(pNode) > 1000 )
-            continue;
-
-        if (pNode->fHandled){
-            printf("Node %s is handled\n", Abc_ObjName(pNode));
+        if ( Abc_NodeIsPersistant(pNode) ){
+            if (fUpdateLevel) pNode->fHandled = 1;
             continue;
         }
+            
+        // skip the nodes with many fanouts
+        if ( Abc_ObjFanoutNum(pNode) > 1000 ){
+            if (fUpdateLevel) pNode->fHandled = 1;
+            continue;
+        }
+
+        if (pNode->fHandled){
+            printf("Abc_NtkRewrite: node %d has been handled.\n", pNode->Id);
+            continue;
+        }
+
+        // Abc_Obj_t * pNodeTmp = Abc_NtkObj(pNtk, 360812);
+        //     if (pNodeTmp != NULL){
+        //         printf("current Pnode %d pNodeTmp (%d, level = %d), fanin0 = %d level = %d, fanin1 = %d level = %d\n", pNode->Id,pNodeTmp->Id, Abc_ObjLevel(pNodeTmp), Abc_ObjFanin0(pNodeTmp)->Id, Abc_ObjLevel(Abc_ObjFanin0(pNodeTmp)), Abc_ObjFanin1(pNodeTmp)->Id, Abc_ObjLevel(Abc_ObjFanin1(pNodeTmp)));
+        //     }
+
         // assert the node's fanin has been handled
-        Abc_Obj_t * pFanin0 = Abc_ObjFanin0(pNode); 
-        Abc_Obj_t * pFanin1 = Abc_ObjFanin1(pNode);         
-        if (pFanin0 != NULL) 
-        if (!Abc_ObjIsCi(pFanin0) && pFanin0->oLNode != NULL)
-            assert(pFanin0->fHandled);
-        if (pFanin1 != NULL)
-        if (!Abc_ObjIsCi(pFanin1) && pFanin1->oLNode != NULL)
-            assert(pFanin1->fHandled);
- 
-          
+        if (fUpdateLevel){
+            Abc_Obj_t * pFanin0 = Abc_ObjFanin0(pNode); 
+            Abc_Obj_t * pFanin1 = Abc_ObjFanin1(pNode);         
+            if (pFanin0 != NULL) 
+            if (!Abc_ObjIsCi(pFanin0) && pFanin0->oLNode != NULL)
+                assert(pFanin0->fHandled);
+            if (pFanin1 != NULL)
+            if (!Abc_ObjIsCi(pFanin1) && pFanin1->oLNode != NULL)
+                assert(pFanin1->fHandled);
+        }
+         
         // Abc_NodeSetTravIdCurrent(pNode);
         clk = Abc_Clock();
         if (fUpdateLevel)
             if ( !pNode->fHandled )  
                 Abc_AigUpdateLevel_Lazy( pNode);
         global_update_time += Abc_Clock() - clk;   
-        printf("current node %d, level = %d\n", pNode->Id, pNode->Level);
-       if ( pNode ->Id == 12202){
-        printf("current node %d, level = %d\n", pNode->Id, pNode->Level);
-       }
+      
 
     //     // get the Node with Id = 467
     //    Abc_Obj_t * pNode467 = Abc_NtkObj(pNtk, 6408);
@@ -245,7 +255,7 @@ Rwr_ManAddTimeUpdate( pManRwr, Abc_Clock() - clk );
 //            Abc_PlaceUpdate( vAddedCells, vUpdatedNets );
     
         if ( fUpdateLevel ){
-            if (!Abc_AigUpdateTopoAff( (Abc_Aig_t *)pNtk->pManFunc, oList )){
+            if (!Abc_AigReplaceUpdateAff( (Abc_Aig_t *)pNtk->pManFunc)){
                 RetValue = -1; 
                 break; 
             } 
@@ -253,27 +263,10 @@ Rwr_ManAddTimeUpdate( pManRwr, Abc_Clock() - clk );
     } 
     Extra_ProgressBarStop( pProgress );
     
-    ABC_PRT( "#############rewrite update level time elapsed", global_update_time );   
-    printf("#############rewrite update level num %d\n", global_level_updates);   
-    printf("#############rewrite  update reverse level num %d\n", global_reverse_updates);   
-
-//  List_PtrForEach(List_Ptr_t*, oList, pNode, oLIter ){
-//      if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
-//         Extra_ProgressBarUpdate( pProgress, i, NULL );
-//         // stop if all nodes have been tried once
-//         if ( i >= nNodes )
-//             break;
-//         // skip persistant nodes
-//         if ( Abc_NodeIsPersistant(pNode) )
-//             continue;
-//         // skip the nodes with many fanouts
-//         if ( Abc_ObjFanoutNum(pNode) > 1000 )
-//             continue;
-//         if (!pNode->fHandled) 
-//         printf("Node %s is not handled\n", Abc_ObjName(pNode)); 
-//  }
-
-
+    // ABC_PRT( "#############rewrite update level time elapsed", global_update_time );   
+    // printf("#############rewrite update level num %d\n", global_level_updates);   
+    // printf("#############rewrite  update reverse level num %d\n", global_reverse_updates);   
+ 
 
 Rwr_ManAddTimeTotal( pManRwr, Abc_Clock() - clkStart );
     // print stats
@@ -288,15 +281,15 @@ Rwr_ManAddTimeTotal( pManRwr, Abc_Clock() - clkStart );
     Cut_ManStop( pManCut );
     pNtk->pManCut = NULL;
 
-//Abc_NtkLevel( pNtk );
+    // clear the mark of fHandled nodes
+    List_PtrForEach(List_Ptr_t*, oList, pNode, oLIter ){ 
+        if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
 
-Abc_Obj_t * pObj;
- Abc_NtkForEachNode( pNtk, pObj, i )
-    { 
-        if ( pObj->Level != 1 + (unsigned)Abc_MaxInt( Abc_ObjFanin0(pObj)->Level, Abc_ObjFanin1(pObj)->Level ) )
-            printf( "Abc_AigCheck: Node \"%s\" has level that does not agree with the fanin levels.\n", Abc_ObjName(pObj) );
-        
+        if (pNode->fHandled) pNode->fHandled = 0; 
     }
+    List_PtrClear(oList);
+
+ 
 
     // start placement package
 //    if ( fPlaceEnable )
