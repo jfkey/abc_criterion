@@ -21,7 +21,6 @@
 #include "base/abc/abc.h"
 #include "opt/rwr/rwr.h"
 #include "bool/dec/dec.h"
-#include "base/abc/abcAig.c"
 
 
 ABC_NAMESPACE_IMPL_START
@@ -51,75 +50,6 @@ extern void  Abc_PlaceUpdate( Vec_Ptr_t * vAddedCells, Vec_Ptr_t * vUpdatedNets 
 ////////////////////////////////////////////////////////////////////////
 ///                     FUNCTION DEFINITIONS                         ///
 ////////////////////////////////////////////////////////////////////////
-
-/**Function*************************************************************
-
-  Synopsis    [Updates the topological order of the nodes in the AIG.]
-
-  Description [Note that: the first node in the affected vector is pTo: with the largest order
-  the other nodes in the affect vector are sorted by topological order (DFS)
-  ]
-               
-  SideEffects []
-
-  SeeAlso     []
-***********************************************************************/
-int Abc_AigUpdateTopoAff( Abc_Aig_t * pMan, List_Ptr_t * oList ){
-    
-    Vec_Ptr_t * vAffTmp; 
-    Abc_Obj_t * pNode, * pNodeFirst;
-    List_Ptr_Node_t * oNodeFirst;
-    int i, j; 
-   // verify input parameters
-    if ( pMan == NULL || oList == NULL )
-        return 0;
-    if ( pMan->vTopoAff == NULL || Vec_PtrSize(pMan->vTopoAff) == 0 )
-        return 1; // nothing to update
-  
-    Vec_PtrForEachEntry(Vec_Ptr_t*, pMan->vTopoAff, vAffTmp, i){
-        // verify affected set
-        if ( vAffTmp == NULL )
-            continue;
-        assert(Vec_PtrSize(vAffTmp) >= 1); 
-        // get the first node in the affected vector, 
-        // and the first node is with correct order 
-        pNodeFirst = Vec_PtrEntry(vAffTmp, 0);
-        oNodeFirst = pNodeFirst->oLNode;
-
-        if (pNodeFirst->oLNode == NULL)
-           continue;
-        assert(!pNodeFirst -> fHandled);   
-        
-        List_Ptr_Node_t * newOrder;
-        // iterate over the nodes in the affected vector in reverse order
-        Vec_PtrForEachEntryReverse(Abc_Obj_t*, vAffTmp, pNode, j){
-            if (pNode == NULL) 
-                return 0; 
-            if (j == 0) 
-                continue;
-            // skip the nodes that are not in the old order 
-            if (pNode -> oLNode == NULL) 
-                continue;
-            
-            // create new order for the nodes in AFF
-            newOrder = List_PtrInsertBefore(oList, oNodeFirst, pNode);
-            assert(newOrder != NULL);
-            // remove the node from the old order
-            List_PtrRemoveNode(oList, pNode->oLNode);
-            // update the node's order
-            pNode->oLNode = newOrder;
-            oNodeFirst = newOrder;  
-            // printf("#######pNode->Id = %d\n", pNode->Id);
-        }
-    }
-    // free the vTopoAff
-    while(Vec_PtrSize(pMan->vTopoAff) > 0){
-        Vec_Ptr_t * vAffTmp = Vec_PtrPop(pMan->vTopoAff);
-        Vec_PtrFree(vAffTmp);
-    }
-    
-    return 1; 
-}
 
 /**Function*************************************************************
 
@@ -190,16 +120,17 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
     pProgress = Extra_ProgressBarStart( stdout, nNodes );
     
     // initialize the linked list of nodes
-    Abc_Aig_t * pMan = (Abc_Aig_t *)pNtk->pManFunc;
+    // Abc_Aig_t * pMan = (Abc_Aig_t *)pNtk->pManFunc;
     List_Ptr_Node_t * oLNode; 
-    List_Ptr_t * oList = pMan->oList; 
+    List_Ptr_t * oList = Abc_AigGetOList((Abc_Aig_t *)pNtk->pManFunc);
     
     Abc_NtkForEachNode( pNtk, pNode, i ){
         oLNode = List_PtrPushBack( oList, pNode );
         assert(oLNode != NULL);
         pNode ->oLNode = oLNode; 
     }
-    pMan -> oList = oList;  
+
+    // pMan -> oList = oList;  
 
     // reset the iterator, i is the index of the node to be rewritten
     i = -1; 
@@ -244,7 +175,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
                 Abc_AigUpdateLevel_Lazy( pNode);
         global_update_time += Abc_Clock() - clk;   
         printf("current node %d, level = %d\n", pNode->Id, pNode->Level);
-       if ( pNode ->Id == 15179){
+       if ( pNode ->Id == 12202){
         printf("current node %d, level = %d\n", pNode->Id, pNode->Level);
        }
 
