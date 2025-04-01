@@ -398,6 +398,7 @@ Abc_Obj_t * Abc_AigAndCreate( Abc_Aig_t * pMan, Abc_Obj_t * p0, Abc_Obj_t * p1 )
     // create the cuts if defined
 //    if ( pAnd->pNtk->pManCut )
 //        Abc_NodeGetCuts( pAnd->pNtk->pManCut, pAnd );
+    pAnd->oLNode = NULL; 
     pAnd->pCopy = NULL;
     // add the node to the list of updated nodes
     if ( pMan->vAddedCells )
@@ -1474,14 +1475,17 @@ int Abc_AigReplaceUpdateAff( Abc_Aig_t * pMan ){
         if (pNode -> oLNode == NULL)
             continue; 
 
+        
         // create new order for the nodes in AFF
-        newOrder = List_PtrInsertAfter(oList, oNodeFirst, pNode);
+        newOrder = List_PtrInsertAfter(oList, oNodeFirst, pNode); 
         assert(newOrder != NULL);
         // remove the node from the old order
         List_PtrRemoveNode(oList, pNode->oLNode);
         // update the node's order
         pNode->oLNode = newOrder;
         oNodeFirst = newOrder;  
+       
+        
     }
     // free the nodes in vAffTmp
     Vec_PtrErase(pMan->vTopoAff);
@@ -1513,6 +1517,7 @@ void Abc_AigReplaceFindAff( Abc_Aig_t * pMan, Abc_Obj_t * pFrom ){
     Abc_AigReplaceFindAff_rec( pMan, pFrom); 
     // the last node is the pFrom node, if it already has in the AIG table     
     Vec_PtrPush(pMan->vTopoAff, pFrom);
+    pFrom->fMarkC = 1; 
     return; 
 }
 
@@ -1607,13 +1612,13 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
         if (isFirst && fUpdateLevel) {
             Abc_AigReplaceFindAff( pMan, Abc_ObjRegular(pNew));
             // print the affected nodes
-            // Abc_Obj_t * pNodeTmp;
-            // int i = 0; 
-            // printf("\t topoAff: ");
-            // Vec_PtrForEachEntry(Abc_Obj_t*, pMan->vTopoAff, pNodeTmp, i){
-            //     printf("%d ", Abc_ObjId(pNodeTmp));
-            // }
-            // printf("\n"); 
+            Abc_Obj_t * pNodeTmp;
+            int i = 0; 
+            printf("\t topoAff: ");
+            Vec_PtrForEachEntry(Abc_Obj_t*, pMan->vTopoAff, pNodeTmp, i){
+                printf("%d ", Abc_ObjId(pNodeTmp));
+            }
+            printf("\n"); 
             isFirst = 0;
         }
  
@@ -1789,11 +1794,14 @@ void Abc_AigDeleteNodeInc( Abc_Aig_t * pMan, Abc_Obj_t * pNode )
         Vec_PtrPushUnique( pMan->vUpdatedNets, pNode0 );
         Vec_PtrPushUnique( pMan->vUpdatedNets, pNode1 );
     }
-    // first remove the old topological order (oLNode) from the linked list 
-    // List_Ptr_Node_t * oLNode = pNode->oLNode;
-    // List_PtrRemoveNode(pMan->oList, oLNode);
-    // pNode->oLNode = NULL;
-    
+
+    List_PtrDupNode (pMan ->oList, pNode->oLNode);
+    // why can not delete the 
+    List_Ptr_Node_t * oLNode = pNode->oLNode;
+    List_PtrRemoveNode(pMan->oList, oLNode);
+    pNode->oLNode = NULL;
+ 
+
     // then remove the node from the table
     Abc_AigAndDelete( pMan, pNode );
     // if the node is in the level structure, remove it

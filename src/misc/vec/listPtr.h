@@ -75,10 +75,7 @@ struct List_Ptr_Iterator_t_
     for ( List_PtrIteratorInit(pList, pIter); !List_PtrIteratorIsEnd(pIter) &&                    \
          (((pEntry) = (Type)List_PtrIteratorData(pIter)), 1); List_PtrIteratorNext(pIter) )
 
-#define List_PtrForEachReverse( Type, pList, pEntry, iter )                                      \
-    for ( List_PtrIteratorInitLast(pList, &(iter)); !List_PtrIteratorIsBOL(&(iter)) &&           \
-         (((pEntry) = (Type)List_PtrIteratorData(&(iter))), 1); List_PtrIteratorPrev(&(iter)) )
-         
+
 ////////////////////////////////////////////////////////////////////////
 ///                     FUNCTION DEFINITIONS                         ///
 ////////////////////////////////////////////////////////////////////////
@@ -177,7 +174,7 @@ static inline List_Ptr_Node_t * List_PtrLastNode( List_Ptr_t * p )
 
 ***********************************************************************/
 static inline void List_PtrNodeFree( List_Ptr_Node_t * pNode )
-{
+{   
     ABC_FREE( pNode );
 }
 
@@ -720,6 +717,7 @@ static inline void * List_PtrRemoveNode( List_Ptr_t * p, List_Ptr_Node_t * pNode
     else
         p->pTail = pNode->pPrev;  // Update tail if removing last node
     
+
     List_PtrNodeFree( pNode );
     p->nSize--;
     
@@ -977,6 +975,50 @@ static inline void * List_PtrSetAt( List_Ptr_t * p, int Position, void * pData )
     pNode->pData = pData;
     
     return pOldData;
+}
+
+
+/**Function*************************************************************
+
+  Synopsis    [Creates a duplicate of a node and maintains its list relationships.]
+
+  Description [Creates a new node with the same data and connects it to the 
+               same adjacent nodes as the original node. The original node is 
+               effectively replaced in the list by the new node.]
+               
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+static inline List_Ptr_Node_t * List_PtrDupNode( List_Ptr_t * p, List_Ptr_Node_t * pNode )
+{
+    List_Ptr_Node_t * pNewNode;
+
+    if ( p == NULL || pNode == NULL )
+        return NULL;
+    
+    // Allocate and initialize the new node with the same data
+    pNewNode = List_PtrNodeAlloc( NULL );
+    if ( pNewNode == NULL )
+        return NULL;
+    
+    // Connect the new node to the same adjacent nodes
+    pNewNode->pNext = pNode->pNext;
+    pNewNode->pPrev = pNode->pPrev;
+    
+    // Update adjacent nodes to point to the new node
+    if ( pNewNode->pPrev != NULL )
+        pNewNode->pPrev->pNext = pNewNode;
+    else
+        p->pHead = pNewNode;  // Update head if duplicating the first node
+        
+    if ( pNewNode->pNext != NULL )
+        pNewNode->pNext->pPrev = pNewNode;
+    else
+        p->pTail = pNewNode;  // Update tail if duplicating the last node
+    
+    return pNewNode;
 }
 
 /**Function*************************************************************
