@@ -15,7 +15,7 @@ log="${binary}_${dataname}_${libname}_${timestamp}.log"
 touch "$log"
 #echo "name, command, input, output, lat, gates, edge, area, delay, lev, stime_gates, stime_gates%, stime_cap(ff), stime_cap%, stime_Area, stime_Area%, stime_Delay(ps), stime_Delay%, cut_time, delay_time, total_time" >> $csv
 
-files=$(find "$2" -name "*.aig")
+files=$(find "$2" -name "*.blif")
 # files=("/home/liujunfeng/benchmarks/mtm/sixteen.aig")
 
 for element in ${files[@]}

@@ -57,6 +57,7 @@ struct List_Ptr_t_
     List_Ptr_Node_t *   pHead;        // pointer to the first node
     List_Ptr_Node_t *   pTail;        // pointer to the last node
     int                 nSize;        // number of nodes in the list
+    List_Ptr_Node_t *   pCurItera;
 };
 
 // Iterator structure for traversing the list
@@ -100,6 +101,7 @@ static inline List_Ptr_t * List_PtrAlloc()
     p->pHead = NULL;
     p->pTail = NULL;
     p->nSize = 0;
+    p->pCurItera = NULL; 
     return p;
 }
 
@@ -991,7 +993,7 @@ static inline void * List_PtrSetAt( List_Ptr_t * p, int Position, void * pData )
   SeeAlso     []
 
 ***********************************************************************/
-static inline List_Ptr_Node_t * List_PtrDupNode( List_Ptr_t * p, List_Ptr_Node_t * pNode )
+static inline List_Ptr_Node_t * List_PtrDupNodeEmpty( List_Ptr_t * p, List_Ptr_Node_t * pNode )
 {
     List_Ptr_Node_t * pNewNode;
 

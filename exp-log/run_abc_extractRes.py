@@ -27,7 +27,7 @@ def parseOriginalRes(text_data, res:list):
         return 
     truncated_text = text_data[:start_idx] 
      
-    design_name = re.search(r'/.*?/([^/]+)\.aig', truncated_text) 
+    design_name = re.search(r'/.*?/([^/]+)\.blif', truncated_text) 
     pattern = r'i/o\s*=\s*(\d+)/\s*(\d+).*?and\s*=\s*(\d+).*?lev\s*=\s*(\d+)'
     match = re.search(pattern, truncated_text, re.DOTALL)
 
@@ -53,8 +53,11 @@ def parseRwRes(text_data, res:list):
     if start_idx == -1:
         print("Split key {} not found".format(split_original_res_key))
         return 
+    truncated_text = text_data[:start_idx]  
+    design_name = re.search(r'/.*?/([^/]+)\.blif', truncated_text) 
+
     truncated_text = text_data[start_idx:] 
-    design_name = re.search(r'/.*?/([^/]+)\:', truncated_text)
+    # design_name = re.search(r'/.*?/([^/]+)\:', truncated_text)
     pattern = r'Resynthesis\s*=\s*([\d.]+)\s*sec.*?Update\s*=\s*([\d.]+)\s*sec.*?TOTAL\s*=\s*([\d.]+)\s*sec.*?i/o\s*=\s*(\d+)/\s*(\d+).*?and\s*=\s*(\d+).*?lev\s*=\s*(\d+)'
     match = re.search(pattern, truncated_text, re.DOTALL)
 

@@ -125,24 +125,17 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
     List_Ptr_t * oList = Abc_AigGetOList((Abc_Aig_t *)pNtk->pManFunc);
     oList->nSize = 0;
     
-    int max_id = 0; 
+    // with representation of order by List 
     Abc_NtkForEachNode( pNtk, pNode, i ){
         oLNode = List_PtrPushBack( oList, pNode );
         assert(oLNode != NULL);
-        pNode ->oLNode = oLNode; 
-        if (pNode->Id > max_id) max_id = pNode->Id;
+        pNode ->oLNode = oLNode;  
     }
-    printf("max_id = %d\n", max_id);
-
-    
+  
     i = -1; 
-    List_Ptr_Iterator_t * oLIter = (List_Ptr_Iterator_t*)ABC_ALLOC(List_Ptr_Iterator_t, 1);
-    // List_Ptr_Node_t *pCurrent = List_PtrFirstNode(oList);
-    // List_Ptr_Node_t *pNext = NULL;
- 
-    
-    List_PtrForEach(List_Ptr_t*, oList, pNode, oLIter ){ 
-    // while (pCurrent != NULL) {
+    oList->pCurItera = List_PtrFirstNode(oList);
+    for (; oList->pCurItera != NULL; oList->pCurItera = oList->pCurItera ->pNext) { 
+        pNode = (Abc_Obj_t *) oList->pCurItera->pData; 
         i ++;  
         // different from the condition in Abc_NtkForEachNode
         // this condition is used to avoid the nodes that may be deleted not in the nework 
@@ -175,14 +168,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
             } 
             continue;
         }
-
-       
-
-        // Abc_Obj_t * pNodeTmp = Abc_NtkObj(pNtk, 360812);
-        //     if (pNodeTmp != NULL){
-        //         printf("current Pnode %d pNodeTmp (%d, level = %d), fanin0 = %d level = %d, fanin1 = %d level = %d\n", pNode->Id,pNodeTmp->Id, Abc_ObjLevel(pNodeTmp), Abc_ObjFanin0(pNodeTmp)->Id, Abc_ObjLevel(Abc_ObjFanin0(pNodeTmp)), Abc_ObjFanin1(pNodeTmp)->Id, Abc_ObjLevel(Abc_ObjFanin1(pNodeTmp)));
-        //     }
-
+        
         // assert the node's fanin has been handled
         if (fUpdateLevel){
             Abc_Obj_t * pFanin0 = Abc_ObjFanin0(pNode); 
@@ -200,36 +186,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         if (fUpdateLevel)
             Abc_AigUpdateLevel_Lazy( pNode);
         global_update_time += Abc_Clock() - clk;   
-      
-
-    //     // get the Node with Id = 467
-    //    Abc_Obj_t * pNode467 = Abc_NtkObj(pNtk, 4200);
-    //     if (pNode467 != NULL && i < 1000){
-    //         printf("current Pnode %d pNode467 (%d, level = %d), fanin0 = %d level = %d, fanin1 = %d level = %d\n", pNode->Id,pNode467->Id, Abc_ObjLevel(pNode467), Abc_ObjFanin0(pNode467)->Id, Abc_ObjLevel(Abc_ObjFanin0(pNode467)), Abc_ObjFanin1(pNode467)->Id, Abc_ObjLevel(Abc_ObjFanin1(pNode467)));
-    //     }
-
-        Abc_Obj_t * pNode4844 = Abc_NtkObj(pNtk, 4844);
-        Abc_Obj_t *  pNode4844Next = (Abc_Obj_t *)pNode4844->oLNode ->pNext ->pData;
-        printf("p4844 Next: %d, current node %d \n", pNode4844Next->Id, pNode ->Id);
-         
-
-        //  4674
-        if (pNode ->Id == 4674) {
-            printf("handle node %d\n", pNode->Id);
-        }
-        
-        // if ( Vec_PtrSize(pNtk->vObjs) > 14617){
-        //     Abc_Obj_t * pNode14617 = Abc_NtkObj(pNtk, 14617);
-        //     List_Ptr_t * listNode = List_PtrFind(oList, pNode14617);
-        //     if (listNode != NULL) {
-        //         printf("current node %d\n", pNode->Id);
-        //     } 
-        // }
-        
-
-         
-
-
+       
         // for each cut, try to resynthesize it
         nGain = Rwr_NodeRewrite( pManRwr, pManCut, pNode, fUpdateLevel, fUseZeros, fPlaceEnable );
         // mark the node as updated 
@@ -240,8 +197,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
             continue;
         } 
         // if we end up here, a rewriting step is accepted
-         
-
+          
         // get hold of the new subgraph to be added to the AIG
         pGraph = (Dec_Graph_t *)Rwr_ManReadDecs(pManRwr);
         fCompl = Rwr_ManReadCompl(pManRwr);
@@ -249,9 +205,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         // reset the array of the changed nodes
         if ( fPlaceEnable )
             Abc_AigUpdateReset( (Abc_Aig_t *)pNtk->pManFunc );
-
-    
-     
+  
         // complement the FF if needed
         if ( fCompl ) Dec_GraphComplement( pGraph );
 clk = Abc_Clock(); 
@@ -296,14 +250,16 @@ Rwr_ManAddTimeTotal( pManRwr, Abc_Clock() - clkStart );
     pNtk->pManCut = NULL;
 
     // clear the mark of fHandled nodes
+    i = 0; 
+    List_Ptr_Iterator_t * oLIter = (List_Ptr_Iterator_t*)ABC_ALLOC(List_Ptr_Iterator_t, 1);
     List_PtrForEach(List_Ptr_t*, oList, pNode, oLIter ){ 
         if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
+        // printf("after delete node: %d \n", pNode->Id);
+        if ( pNode->Level != 1 + (unsigned)Abc_MaxInt( Abc_ObjFanin0(pNode)->Level, Abc_ObjFanin1(pNode)->Level ) )
+            printf( "Abc_AigCheck immediately after rewrite: Node \"%d\" (%d) handled has level that does not agree with the fanin levels.\n", pNode->fHandled, Abc_ObjId(pNode) );
         if (pNode->fHandled){
             pNode->fHandled = 0; 
-        }   
-        if ( pNode->Level != 1 + (unsigned)Abc_MaxInt( Abc_ObjFanin0(pNode)->Level, Abc_ObjFanin1(pNode)->Level ) )
-            printf( "Abc_AigCheck: Node \"%d\" has level that does not agree with the fanin levels.\n", Abc_ObjId(pNode) );
-
+        }
     }
     List_PtrClear(oList);
     ABC_FREE(oLIter);

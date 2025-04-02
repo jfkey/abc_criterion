@@ -1390,9 +1390,9 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
         
         assert(pMan->vTopoAff != NULL);
         Vec_PtrClear(pMan->vTopoAff);
-        // the first node is the order of pTo node
-        assert(Abc_ObjRegular(pOld)->oLNode != NULL);
-        Vec_PtrPush(pMan->vTopoAff, Abc_ObjRegular(pOld)->oLNode);
+        // // the first node is the order of pTo node, 
+        // assert(Abc_ObjRegular(pOld)->oLNode != NULL);
+        // Vec_PtrPush(pMan->vTopoAff, Abc_ObjRegular(pOld)->oLNode);
     }
     // process the replacements
     while ( Vec_PtrSize(pMan->vStackReplaceOld) )
@@ -1458,24 +1458,18 @@ int Abc_AigReplaceUpdateAff( Abc_Aig_t * pMan ){
     if ( pMan->vTopoAff == NULL || Vec_PtrSize(pMan->vTopoAff) == 0 )
         return 1; // nothing to update
 
+    oNodeFirst = pMan->oList->pCurItera; 
     // update the topological order of the nodes in the affected vector 
     Vec_PtrForEachEntry(Abc_Obj_t*, pMan->vTopoAff, pNode, i){ 
         if (pNode == NULL)
             return 0;
-       
-        // the first node is the pOld node
-        if (i == 0) {
-            oNodeFirst = (List_Ptr_Node_t *)pNode;
-            continue; 
-        }
-
+          
         // clean the mark
         pNode ->fMarkC = 0;
         // skip the nodes that are not in the old order
         if (pNode -> oLNode == NULL)
             continue; 
 
-        
         // create new order for the nodes in AFF
         newOrder = List_PtrInsertAfter(oList, oNodeFirst, pNode); 
         assert(newOrder != NULL);
@@ -1483,9 +1477,7 @@ int Abc_AigReplaceUpdateAff( Abc_Aig_t * pMan ){
         List_PtrRemoveNode(oList, pNode->oLNode);
         // update the node's order
         pNode->oLNode = newOrder;
-        oNodeFirst = newOrder;  
-       
-        
+        oNodeFirst = newOrder;          
     }
     // free the nodes in vAffTmp
     Vec_PtrErase(pMan->vTopoAff);
@@ -1531,6 +1523,9 @@ void  Abc_AigReplaceFindAff_rec( Abc_Aig_t * pMan, Abc_Obj_t * pFrom ){
             continue;   
         if (pFanin -> fMarkC)
             continue;
+        // skip the current iterator node 
+        if (pFanin == (Abc_Obj_t *) pMan ->oList->pCurItera->pData )
+            continue; 
         pFanin->fMarkC = 1; 
         Abc_AigReplaceFindAff_rec( pMan, pFanin ); 
         // push the node to the topoAff
@@ -1555,7 +1550,7 @@ void  Abc_AigReplaceFindAff_rec( Abc_Aig_t * pMan, Abc_Obj_t * pFrom ){
 ***********************************************************************/
 void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int fUpdateLevel )
 {
-    Abc_Obj_t * pFanin1, * pFanin2, * pFanout, * pFanoutNew, * pFanoutFanout, * pFanoutMin = NULL;
+    Abc_Obj_t * pFanin1, * pFanin2, * pFanout, * pFanoutNew, * pFanoutFanout;
     int k, v, iFanin;
     // int minFanoutLevel = ABC_INFINITY; 
     int isFirst = 1; 
@@ -1610,15 +1605,15 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
         assert( Abc_ObjRegular(pFanin1) != Abc_ObjRegular(pFanin2) );             
         
         if (isFirst && fUpdateLevel) {
-            Abc_AigReplaceFindAff( pMan, Abc_ObjRegular(pNew));
-            // print the affected nodes
-            Abc_Obj_t * pNodeTmp;
-            int i = 0; 
-            printf("\t topoAff: ");
-            Vec_PtrForEachEntry(Abc_Obj_t*, pMan->vTopoAff, pNodeTmp, i){
-                printf("%d ", Abc_ObjId(pNodeTmp));
-            }
-            printf("\n"); 
+            Abc_AigReplaceFindAff( pMan, Abc_ObjRegular(pNew)); 
+            // // print the affected nodes
+            // Abc_Obj_t * pNodeTmp;
+            // int i = 0; 
+            // printf("\t topoAff: ");
+            // Vec_PtrForEachEntry(Abc_Obj_t*, pMan->vTopoAff, pNodeTmp, i){
+            //     printf("%d ", Abc_ObjId(pNodeTmp));
+            // }
+            // printf("\n"); 
             isFirst = 0;
         }
  
@@ -1634,7 +1629,6 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
 
         if ( fUpdateLevel )
         {
-           
             // if (pFanout->fMarkA == 0){
             //     pFanout->fMarkA = 1;
             //     P_QuePush(pMan->qLevels, pFanout, 1.0 * pFanout->Level); 
@@ -1795,13 +1789,19 @@ void Abc_AigDeleteNodeInc( Abc_Aig_t * pMan, Abc_Obj_t * pNode )
         Vec_PtrPushUnique( pMan->vUpdatedNets, pNode1 );
     }
 
-    List_PtrDupNode (pMan ->oList, pNode->oLNode);
-    // why can not delete the 
-    List_Ptr_Node_t * oLNode = pNode->oLNode;
-    List_PtrRemoveNode(pMan->oList, oLNode);
-    pNode->oLNode = NULL;
+    // duplicate the list node, with null pData. 
+    // pMan ->oList != NULL   :  when delete the node in fUpdateLevel mode
+    // pNode ->oLNode != NULL :  to skip the new created node 
+    // we should redirect the current oLNode iterator
+    if (pMan ->oList != NULL && pNode ->oLNode != NULL) {
+        List_Ptr_Node_t * tmp = List_PtrDupNodeEmpty (pMan->oList, pNode->oLNode);
+        // current iteraotr is deleted. 
+        if (pNode ->oLNode == pMan->oList->pCurItera) {
+            pMan->oList->pCurItera = tmp; 
+        } 
+    }        
  
-
+    
     // then remove the node from the table
     Abc_AigAndDelete( pMan, pNode );
     // if the node is in the level structure, remove it
