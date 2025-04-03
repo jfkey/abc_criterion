@@ -23,6 +23,14 @@
 
 ABC_NAMESPACE_IMPL_START
 
+extern abctime global_time; 
+extern abctime global_resynthesis_time; 
+extern abctime global_cut_time; 
+extern abctime global_aig_update_time; 
+extern abctime global_aig_converter_time;  
+extern long int global_level_updates;
+extern long int global_reverse_updates;
+extern long int global_node_rewritten; 
  
 ////////////////////////////////////////////////////////////////////////
 ///                        DECLARATIONS                              ///
@@ -149,6 +157,15 @@ int Abc_NtkResubstitute( Abc_Ntk_t * pNtk, int nCutMax, int nStepsMax, int nMinS
 
     assert( Abc_NtkIsStrash(pNtk) );
 
+    global_time = 0; 
+    global_resynthesis_time = 0; 
+    global_cut_time = 0; 
+    global_aig_update_time = 0; 
+    global_aig_converter_time = 0;  
+    global_level_updates = 0;
+    global_reverse_updates = 0;
+    global_node_rewritten = 0; 
+
     // cleanup the AIG
     Abc_AigCleanup((Abc_Aig_t *)pNtk->pManFunc);
     // start the managers
@@ -172,23 +189,72 @@ int Abc_NtkResubstitute( Abc_Ntk_t * pNtk, int nCutMax, int nStepsMax, int nMinS
     pProgress = Extra_ProgressBarStart( stdout, nNodes );
     //clear markAB at the beginning
     Abc_NtkCleanMarkAB( pNtk );
-    Abc_NtkForEachNode( pNtk, pNode, i )
-    {
+
+
+    // initialize the linked list of nodes
+    // Abc_Aig_t * pMan = (Abc_Aig_t *)pNtk->pManFunc;
+    List_Ptr_Node_t * oLNode; 
+    List_Ptr_t * oList = Abc_AigGetOList((Abc_Aig_t *)pNtk->pManFunc);
+    oList->nSize = 0;
+
+      // with representation of order by List 
+    Abc_NtkForEachNode( pNtk, pNode, i ){
+        oLNode = List_PtrPushBack( oList, pNode );
+        assert(oLNode != NULL);
+        pNode ->oLNode = oLNode;  
+    }
+    i = -1; 
+    oList->pCurItera = List_PtrFirstNode(oList);
+    for (; oList->pCurItera != NULL; oList->pCurItera = oList->pCurItera ->pNext) { 
+        pNode = (Abc_Obj_t *) oList->pCurItera->pData; 
+        i ++;  
+        
+        // different from the condition in Abc_NtkForEachNode
+        // this condition is used to avoid the nodes that may be deleted not in the nework 
+        // we delete the node from AIG but do not remove the order from the linked list 
+        if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
         Extra_ProgressBarUpdate( pProgress, i, NULL );
-        // skip the constant node
-//        if ( Abc_NodeIsConst(pNode) )
-//            continue;
-        // skip persistant nodes
-        if ( Abc_NodeIsPersistant(pNode) )
+        if (pNode->fHandled){
+            printf("Abc_NtkRewrite: node %d has been handled.\n", pNode->Id); 
             continue;
-        // skip the nodes with many fanouts
-        if ( Abc_ObjFanoutNum(pNode) > 1000 )
-            continue;
+        }
+
         // stop if all nodes have been tried once
         if ( i >= nNodes )
             break;
+        // skip persistant nodes
+        if ( Abc_NodeIsPersistant(pNode) ){
+            if (fUpdateLevel) {
+                pNode->fHandled = 1;
+                Abc_AigUpdateLevel_Lazy( pNode);
+            } 
+            continue;
+        }
+            
+        // skip the nodes with many fanouts
+        if ( Abc_ObjFanoutNum(pNode) > 1000 ){
+            if (fUpdateLevel) {
+                pNode->fHandled = 1;
+                Abc_AigUpdateLevel_Lazy( pNode);
+            } 
+            continue;
+        }
 
-        // compute a reconvergence-driven cut
+         // assert the node's fanin has been handled
+        if (fUpdateLevel){
+            Abc_Obj_t * pFanin0 = Abc_ObjFanin0(pNode); 
+            Abc_Obj_t * pFanin1 = Abc_ObjFanin1(pNode);         
+            if (pFanin0 != NULL) 
+            if (!Abc_ObjIsCi(pFanin0) && pFanin0->oLNode != NULL)
+                assert(pFanin0->fHandled);
+            if (pFanin1 != NULL)
+            if (!Abc_ObjIsCi(pFanin1) && pFanin1->oLNode != NULL)
+                assert(pFanin1->fHandled);
+             
+            Abc_AigUpdateLevel_Lazy( pNode); 
+        }
+
+         // compute a reconvergence-driven cut
 clk = Abc_Clock();
         vLeaves = Abc_NodeFindCut( pManCut, pNode, 0 );
 //        vLeaves = Abc_CutFactorLarge( pNode, nCutMax );
@@ -214,11 +280,15 @@ clk = Abc_Clock();
 //        Vec_PtrFree( vLeaves );
 //        Abc_ManResubCleanup( pManRes );
 pManRes->timeRes += Abc_Clock() - clk;
-        if ( pFForm == NULL )
+        if ( pFForm == NULL ){
+            if (fUpdateLevel)  pNode->fHandled = 1;
             continue;
+        }
+            
         if ( pManRes->nLastGain < nMinSaved )
         {
             Dec_GraphFree( pFForm );
+            if (fUpdateLevel)  pNode->fHandled = 1;
             continue;
         }
         pManRes->nTotalGain += pManRes->nLastGain;
@@ -236,10 +306,96 @@ clk = Abc_Clock();
         Dec_GraphUpdateNetwork( pNode, pFForm, fUpdateLevel, pManRes->nLastGain );
 pManRes->timeNtk += Abc_Clock() - clk;
         Dec_GraphFree( pFForm );
+        global_node_rewritten ++; 
+        if ( fUpdateLevel ){
+            pNode->fHandled = 1;
+            if (!Abc_AigReplaceUpdateAff( (Abc_Aig_t *)pNtk->pManFunc)){
+                printf ("Abc_NtkRerfactor: Abc_AigReplaceUpdateAff.\n"); 
+                break; 
+            } 
+        }  
     }
+
+//     Abc_NtkForEachNode( pNtk, pNode, i )
+//     {
+//         Extra_ProgressBarUpdate( pProgress, i, NULL );
+//         // skip the constant node
+// //        if ( Abc_NodeIsConst(pNode) )
+// //            continue;
+//         // skip persistant nodes
+//         if ( Abc_NodeIsPersistant(pNode) )
+//             continue;
+//         // skip the nodes with many fanouts
+//         if ( Abc_ObjFanoutNum(pNode) > 1000 )
+//             continue;
+//         // stop if all nodes have been tried once
+//         if ( i >= nNodes )
+//             break;
+
+//         // compute a reconvergence-driven cut
+// clk = Abc_Clock();
+//         vLeaves = Abc_NodeFindCut( pManCut, pNode, 0 );
+// //        vLeaves = Abc_CutFactorLarge( pNode, nCutMax );
+// pManRes->timeCut += Abc_Clock() - clk;
+// /*
+//         if ( fVerbose && vLeaves )
+//         printf( "Node %6d : Leaves = %3d. Volume = %3d.\n", pNode->Id, Vec_PtrSize(vLeaves), Abc_CutVolumeCheck(pNode, vLeaves) );
+//         if ( vLeaves == NULL )
+//             continue;
+// */
+//         // get the don't-cares
+//         if ( pManOdc )
+//         {
+// clk = Abc_Clock();
+//             Abc_NtkDontCareClear( pManOdc );
+//             Abc_NtkDontCareCompute( pManOdc, pNode, vLeaves, pManRes->pCareSet );
+// pManRes->timeTruth += Abc_Clock() - clk;
+//         }
+
+//         // evaluate this cut
+// clk = Abc_Clock();
+//         pFForm = Abc_ManResubEval( pManRes, pNode, vLeaves, nStepsMax, fUpdateLevel, fVerbose );
+// //        Vec_PtrFree( vLeaves );
+// //        Abc_ManResubCleanup( pManRes );
+// pManRes->timeRes += Abc_Clock() - clk;
+//         if ( pFForm == NULL )
+//             continue;
+//         if ( pManRes->nLastGain < nMinSaved )
+//         {
+//             Dec_GraphFree( pFForm );
+//             continue;
+//         }
+//         pManRes->nTotalGain += pManRes->nLastGain;
+// /*
+//         if ( pManRes->nLeaves == 4 && pManRes->nMffc == 2 && pManRes->nLastGain == 1 )
+//         {
+//             printf( "%6d :  L = %2d. V = %2d. Mffc = %2d. Divs = %3d.   Up = %3d. Un = %3d. B = %3d.\n", 
+//                    pNode->Id, pManRes->nLeaves, Abc_CutVolumeCheck(pNode, vLeaves), pManRes->nMffc, pManRes->nDivs, 
+//                    pManRes->vDivs1UP->nSize, pManRes->vDivs1UN->nSize, pManRes->vDivs1B->nSize );
+//             Abc_ManResubPrintDivs( pManRes, pNode, vLeaves );
+//         }
+// */
+//         // acceptable replacement found, update the graph
+// clk = Abc_Clock();
+//         Dec_GraphUpdateNetwork( pNode, pFForm, fUpdateLevel, pManRes->nLastGain );
+// pManRes->timeNtk += Abc_Clock() - clk;
+//         Dec_GraphFree( pFForm );
+//     }
+
     Extra_ProgressBarStop( pProgress );
 pManRes->timeTotal = Abc_Clock() - clkStart;
     pManRes->nNodesEnd = Abc_NtkNodeNum(pNtk);
+
+
+    ABC_PRT("###global_time ",                   pManRes->timeTotal);   
+    ABC_PRT("###global_cut ",                    pManRes->timeCut); 
+    ABC_PRT("###global_resynthesis_time",        pManRes->timeRes); 
+    ABC_PRT("###global_aig_update_time",         global_aig_update_time); 
+    ABC_PRT("###global_aig_converter_time ",     pManRes->timeNtk); 
+      
+    printf("###global_level_updates \t %ld\n",    global_level_updates);   
+    printf("###global_reverse_updates \t %ld\n",  global_reverse_updates);   
+    printf("###global_node_rewritten \t %ld\n",   global_node_rewritten);      
 
     // print statistics
     if ( fVerbose )
@@ -251,8 +407,12 @@ pManRes->timeTotal = Abc_Clock() - clkStart;
     if ( pManOdc ) Abc_NtkDontCareFree( pManOdc );
 
     // clean the data field
-    Abc_NtkForEachObj( pNtk, pNode, i )
+    Abc_NtkForEachObj( pNtk, pNode, i ) {
         pNode->pData = NULL;
+        if (pNode->fHandled)
+            pNode->fHandled = 0; 
+    }    
+    List_PtrClear(oList);
 
     if ( Abc_NtkLatchNum(pNtk) ) {
         Abc_NtkForEachLatch(pNtk, pNode, i)

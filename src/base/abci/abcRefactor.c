@@ -24,6 +24,15 @@
 
 ABC_NAMESPACE_IMPL_START
 
+extern abctime global_time; 
+extern abctime global_resynthesis_time; 
+extern abctime global_cut_time; 
+extern abctime global_aig_update_time; 
+extern abctime global_aig_converter_time;  
+extern long int global_level_updates;
+extern long int global_reverse_updates;
+extern long int global_node_rewritten; 
+ 
 
 ////////////////////////////////////////////////////////////////////////
 ///                        DECLARATIONS                              ///
@@ -338,6 +347,15 @@ int Abc_NtkRefactor( Abc_Ntk_t * pNtk, int nNodeSizeMax, int nMinSaved, int nCon
     abctime clk, clkStart = Abc_Clock();
     int i, nNodes, RetValue = 1;
 
+    global_time = 0; 
+    global_resynthesis_time = 0; 
+    global_cut_time = 0; 
+    global_aig_update_time = 0; 
+    global_aig_converter_time = 0;  
+    global_level_updates = 0;
+    global_reverse_updates = 0;
+    global_node_rewritten = 0; 
+
     assert( Abc_NtkIsStrash(pNtk) );
     // cleanup the AIG
     Abc_AigCleanup((Abc_Aig_t *)pNtk->pManFunc);
@@ -364,9 +382,10 @@ int Abc_NtkRefactor( Abc_Ntk_t * pNtk, int nNodeSizeMax, int nMinSaved, int nCon
         pNode ->oLNode = oLNode; 
     }
     i = -1; 
-     List_Ptr_Iterator_t * oLIter = (List_Ptr_Iterator_t*)ABC_ALLOC(List_Ptr_Iterator_t, 1);
-   
-    List_PtrForEach(List_Ptr_t*, oList, pNode, oLIter ){ 
+ 
+    oList->pCurItera = List_PtrFirstNode(oList);
+    for (; oList->pCurItera != NULL; oList->pCurItera = oList->pCurItera ->pNext) { 
+        pNode = (Abc_Obj_t *) oList->pCurItera->pData;  
         i ++;  
         // different from the condition in Abc_NtkForEachNode
         // this condition is used to avoid the nodes that may be deleted not in the nework 
@@ -374,25 +393,30 @@ int Abc_NtkRefactor( Abc_Ntk_t * pNtk, int nNodeSizeMax, int nMinSaved, int nCon
         if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
         Extra_ProgressBarUpdate( pProgress, i, NULL );
         
-        // skip persistant nodes
-        if ( Abc_NodeIsPersistant(pNode) ){
-            if (fUpdateLevel) pNode->fHandled = 1;
-            continue;
-        }
-        
-        // skip the nodes with many fanouts
-        if ( Abc_ObjFanoutNum(pNode) > 1000 ){
-            if (fUpdateLevel) pNode->fHandled = 1;
+        if (pNode->fHandled){
+            printf("Abc_NtkRerfactor: node %d has been handled.\n", pNode->Id); 
             continue;
         }
         // stop if all nodes have been tried once
         if ( i >= nNodes )
-            break;
-
-        if (pNode->fHandled){
-            printf("Abc_NtkRerfactor: node %d has been handled.\n", pNode->Id);
+            break; 
+        // skip persistant nodes
+        if ( Abc_NodeIsPersistant(pNode) ){
+            if (fUpdateLevel) {
+                pNode->fHandled = 1;
+                Abc_AigUpdateLevel_Lazy( pNode);
+            } 
+            continue;
+        } 
+        // skip the nodes with many fanouts
+        if ( Abc_ObjFanoutNum(pNode) > 1000 ){
+            if (fUpdateLevel) {
+                pNode->fHandled = 1;
+                Abc_AigUpdateLevel_Lazy( pNode);
+            } 
             continue;
         }
+         
         if (fUpdateLevel){
             Abc_Obj_t * pFanin0 = Abc_ObjFanin0(pNode); 
             Abc_Obj_t * pFanin1 = Abc_ObjFanin1(pNode);         
@@ -401,13 +425,11 @@ int Abc_NtkRefactor( Abc_Ntk_t * pNtk, int nNodeSizeMax, int nMinSaved, int nCon
                 assert(pFanin0->fHandled);
             if (pFanin1 != NULL)
             if (!Abc_ObjIsCi(pFanin1) && pFanin1->oLNode != NULL)
-                assert(pFanin1->fHandled);
-        
+                assert(pFanin1->fHandled); 
             if ( !pNode->fHandled )  
                 Abc_AigUpdateLevel_Lazy( pNode);
         }
-
-
+ 
 
         // compute a reconvergence-driven cut
 clk = Abc_Clock();
@@ -430,20 +452,19 @@ clk = Abc_Clock();
             RetValue = -1;
             break;
         }
-        if (fUpdateLevel)  pNode->fHandled = 1;
+        global_node_rewritten ++; 
+pManRef->timeNtk += Abc_Clock() - clk;
+        Dec_GraphFree( pFForm );
 
         if ( fUpdateLevel ){
-            if (!Abc_AigReplaceUpdateAff( (Abc_Aig_t *)pNtk->pManFunc)){
+           pNode->fHandled = 1;
+           if (!Abc_AigReplaceUpdateAff( (Abc_Aig_t *)pNtk->pManFunc)){
                 RetValue = -1; 
                 break; 
             } 
         } 
-pManRef->timeNtk += Abc_Clock() - clk;
-        Dec_GraphFree( pFForm );
-
     }
-
-
+ 
 //     Abc_NtkForEachNode( pNtk, pNode, i )
 //     {
 //         Extra_ProgressBarUpdate( pProgress, i, NULL );
@@ -483,15 +504,18 @@ pManRef->timeNtk += Abc_Clock() - clk;
     Extra_ProgressBarStop( pProgress );
 pManRef->timeTotal = Abc_Clock() - clkStart;
     pManRef->nNodesEnd = Abc_NtkNodeNum(pNtk);
+    
 
-    // clear the mark of fHandled nodes
-    List_PtrForEach(List_Ptr_t*, oList, pNode, oLIter ){ 
-        if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
+    ABC_PRT("###global_time ",                   pManRef->timeTotal);   
+    ABC_PRT("###global_cut ",                    pManRef->timeCut); 
+    ABC_PRT("###global_resynthesis_time",        pManRef->timeRes); 
+    ABC_PRT("###global_aig_update_time",         global_aig_update_time); 
+    ABC_PRT("###global_aig_converter_time ",     pManRef->timeNtk); 
+      
+    printf("###global_level_updates \t %ld\n",    global_level_updates);   
+    printf("###global_reverse_updates \t %ld\n",  global_reverse_updates);   
+    printf("###global_node_rewritten \t %ld\n",   global_node_rewritten);      
 
-        if (pNode->fHandled) pNode->fHandled = 0; 
-    }
-    List_PtrClear(oList);
-    ABC_FREE(oLIter);
 
     // print statistics of the manager
     if ( fVerbose )
@@ -499,6 +523,21 @@ pManRef->timeTotal = Abc_Clock() - clkStart;
     // delete the managers
     Abc_NtkManCutStop( pManCut );
     Abc_NtkManRefStop( pManRef );
+
+      // clear the mark of fHandled nodes
+    List_Ptr_Iterator_t * oLIter = (List_Ptr_Iterator_t*)ABC_ALLOC(List_Ptr_Iterator_t, 1);
+    List_PtrForEach(List_Ptr_t*, oList, pNode, oLIter ){ 
+        if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
+        // printf("after delete node: %d \n", pNode->Id);
+        if ( pNode->Level != 1 + (unsigned)Abc_MaxInt( Abc_ObjFanin0(pNode)->Level, Abc_ObjFanin1(pNode)->Level ) )
+            printf( "Abc_AigCheck immediately after refactor: Node \"%d\" (%d) handled has level that does not agree with the fanin levels.\n", pNode->fHandled, Abc_ObjId(pNode) );
+        if (pNode->fHandled){
+            pNode->fHandled = 0; 
+        }
+    }
+    List_PtrClear(oList);
+    ABC_FREE(oLIter);
+
     // put the nodes into the DFS order and reassign their IDs
     Abc_NtkReassignIds( pNtk );
 //    Abc_AigCheckFaninOrder( pNtk->pManFunc );

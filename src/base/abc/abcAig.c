@@ -22,9 +22,19 @@
 
 ABC_NAMESPACE_IMPL_START
 
-abctime global_update_time = 0;
-int global_level_updates = 0;
-int global_reverse_updates = 0;
+abctime global_update_time = 0;         // do not use 
+// abctime global_traverse_time = 0; 
+abctime global_time = 0; 
+abctime global_resynthesis_time = 0; 
+abctime global_cut_time = 0; 
+abctime global_aig_update_time = 0;     // maintain order, level /reverse level computation 
+abctime global_aig_converter_time = 0;      
+long int global_level_updates = 0;
+long int global_reverse_updates = 0;
+long int global_node_rewritten = 0; 
+
+
+
  
 
 /*
@@ -1358,7 +1368,9 @@ int Abc_AigUpdateLevel_rec(  Abc_Obj_t * pNode ){
  
 void Abc_AigUpdateLevel_Lazy( Abc_Obj_t * pNode ){  
     // perform back dfs until the nodes are visited  
+    abctime clk = Abc_Clock(); 
     Abc_AigUpdateLevel_rec( pNode ); 
+    global_aig_update_time += Abc_Clock() - clk;
 }
     
 
@@ -1425,7 +1437,7 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
         abctime clk = Abc_Clock(); 
         if ( pMan->pNtkAig->vLevelsR )  
             Abc_AigUpdateLevelIncR_int( pMan ); 
-        global_update_time += Abc_Clock() - clk;
+        global_aig_update_time  += Abc_Clock() - clk;
         
     }  
     
@@ -1447,6 +1459,7 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
   SeeAlso     []
 ***********************************************************************/
 int Abc_AigReplaceUpdateAff( Abc_Aig_t * pMan ){ 
+    abctime clk = Abc_Clock(); 
     Abc_Obj_t * pNode;
     List_Ptr_Node_t * oNodeFirst, * newOrder;
     List_Ptr_t * oList = Abc_AigGetOList(pMan);
@@ -1479,6 +1492,7 @@ int Abc_AigReplaceUpdateAff( Abc_Aig_t * pMan ){
         pNode->oLNode = newOrder;
         oNodeFirst = newOrder;          
     }
+    global_aig_update_time += Abc_Clock() - clk; 
     // free the nodes in vAffTmp
     Vec_PtrErase(pMan->vTopoAff);
     return 1; 
@@ -1504,6 +1518,8 @@ void Abc_AigReplaceFindAff( Abc_Aig_t * pMan, Abc_Obj_t * pFrom ){
     if (Abc_ObjIsCi(pFrom) || Abc_AigNodeIsConst(pFrom)) 
         return; 
     if (pFrom -> fHandled)
+        return; 
+    if (pFrom == (Abc_Obj_t *) pMan ->oList->pCurItera->pData )
         return; 
  
     Abc_AigReplaceFindAff_rec( pMan, pFrom); 
@@ -1605,7 +1621,9 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
         assert( Abc_ObjRegular(pFanin1) != Abc_ObjRegular(pFanin2) );             
         
         if (isFirst && fUpdateLevel) {
+            abctime clk = Abc_Clock();
             Abc_AigReplaceFindAff( pMan, Abc_ObjRegular(pNew)); 
+            global_aig_update_time += Abc_Clock() - clk;
             // // print the affected nodes
             // Abc_Obj_t * pNodeTmp;
             // int i = 0; 
@@ -1788,6 +1806,7 @@ void Abc_AigDeleteNodeInc( Abc_Aig_t * pMan, Abc_Obj_t * pNode )
         Vec_PtrPushUnique( pMan->vUpdatedNets, pNode0 );
         Vec_PtrPushUnique( pMan->vUpdatedNets, pNode1 );
     }
+    // printf("delete node %d \n", pNode->Id); 
 
     // duplicate the list node, with null pData. 
     // pMan ->oList != NULL   :  when delete the node in fUpdateLevel mode

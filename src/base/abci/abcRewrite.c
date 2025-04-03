@@ -25,10 +25,15 @@
 
 ABC_NAMESPACE_IMPL_START
 
-extern abctime global_update_time; 
-extern int global_level_updates;
-extern int global_reverse_updates;
-
+ 
+extern abctime global_time; 
+extern abctime global_resynthesis_time; 
+extern abctime global_cut_time; 
+extern abctime global_aig_update_time; 
+extern abctime global_aig_converter_time;  
+extern long int global_level_updates;
+extern long int global_reverse_updates;
+extern long int global_node_rewritten; 
 /*
     The ideas realized in this package are inspired by the paper:
     Per Bjesse, Arne Boralv, "DAG-aware circuit compression for 
@@ -79,9 +84,16 @@ int Abc_NtkRewrite( Abc_Ntk_t * pNtk, int fUpdateLevel, int fUseZeros, int fVerb
      
     // Abc_AigCleanup((Abc_Aig_t *)pNtk->pManFunc);
     Abc_AigCleanupInc((Abc_Aig_t *)pNtk->pManFunc);
+    
+ 
+    global_time = 0; 
+    global_resynthesis_time = 0; 
+    global_cut_time = 0; 
+    global_aig_update_time = 0; 
+    global_aig_converter_time = 0;  
     global_level_updates = 0;
-    global_reverse_updates = 0; 
-    global_update_time = 0;
+    global_reverse_updates = 0;
+    global_node_rewritten = 0; 
 
 /*
     {
@@ -131,7 +143,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         assert(oLNode != NULL);
         pNode ->oLNode = oLNode;  
     }
-  
+    
     i = -1; 
     oList->pCurItera = List_PtrFirstNode(oList);
     for (; oList->pCurItera != NULL; oList->pCurItera = oList->pCurItera ->pNext) { 
@@ -168,7 +180,9 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
             } 
             continue;
         }
-        
+        // if (pNode->Id == 300281) 
+            // printf("currrent node id %d \n", pNode->Id); 
+
         // assert the node's fanin has been handled
         if (fUpdateLevel){
             Abc_Obj_t * pFanin0 = Abc_ObjFanin0(pNode); 
@@ -179,13 +193,10 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
             if (pFanin1 != NULL)
             if (!Abc_ObjIsCi(pFanin1) && pFanin1->oLNode != NULL)
                 assert(pFanin1->fHandled);
+             
+            Abc_AigUpdateLevel_Lazy( pNode); 
         }
          
-        // Abc_NodeSetTravIdCurrent(pNode);
-        clk = Abc_Clock();
-        if (fUpdateLevel)
-            Abc_AigUpdateLevel_Lazy( pNode);
-        global_update_time += Abc_Clock() - clk;   
        
         // for each cut, try to resynthesize it
         nGain = Rwr_NodeRewrite( pManRwr, pManCut, pNode, fUpdateLevel, fUseZeros, fPlaceEnable );
@@ -214,15 +225,16 @@ clk = Abc_Clock();
             if (fUpdateLevel)  pNode->fHandled = 1;
             RetValue = -1;
             break;
-        }
-        if (fUpdateLevel) pNode->fHandled = 1;
+        } 
 Rwr_ManAddTimeUpdate( pManRwr, Abc_Clock() - clk );
     if (fCompl) Dec_GraphComplement(pGraph);
         // use the array of changed nodes to update placement
 //        if ( fPlaceEnable )
 //            Abc_PlaceUpdate( vAddedCells, vUpdatedNets );
-    
+        
+        global_node_rewritten += 1; 
         if ( fUpdateLevel ){
+            pNode->fHandled = 1;
             if (!Abc_AigReplaceUpdateAff( (Abc_Aig_t *)pNtk->pManFunc)){
                 RetValue = -1; 
                 break; 
@@ -230,13 +242,21 @@ Rwr_ManAddTimeUpdate( pManRwr, Abc_Clock() - clk );
         }  
     } 
     Extra_ProgressBarStop( pProgress );
-    
-    // ABC_PRT( "#############rewrite update level time elapsed", global_update_time );   
-    // printf("#############rewrite update level num %d\n", global_level_updates);   
-    // printf("#############rewrite  update reverse level num %d\n", global_reverse_updates);   
- 
+     
 
 Rwr_ManAddTimeTotal( pManRwr, Abc_Clock() - clkStart );
+
+    ABC_PRT("###global_time ",                   pManRwr->timeTotal);   
+    ABC_PRT("###global_cut ",                    pManRwr->timeCut); 
+    ABC_PRT("###global_resynthesis_time",        pManRwr->timeRes); 
+    ABC_PRT("###global_aig_update_time",         global_aig_update_time); 
+    ABC_PRT("###global_aig_converter_time ",     pManRwr->timeUpdate); 
+      
+    printf("###global_level_updates \t %ld\n",    global_level_updates);   
+    printf("###global_reverse_updates \t %ld\n",  global_reverse_updates);   
+    printf("###global_node_rewritten \t %ld\n",   global_node_rewritten);       
+ 
+
     // print stats
     pManRwr->nNodesEnd = Abc_NtkNodeNum(pNtk);
     if ( fVerbose )
@@ -250,7 +270,6 @@ Rwr_ManAddTimeTotal( pManRwr, Abc_Clock() - clkStart );
     pNtk->pManCut = NULL;
 
     // clear the mark of fHandled nodes
-    i = 0; 
     List_Ptr_Iterator_t * oLIter = (List_Ptr_Iterator_t*)ABC_ALLOC(List_Ptr_Iterator_t, 1);
     List_PtrForEach(List_Ptr_t*, oList, pNode, oLIter ){ 
         if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
