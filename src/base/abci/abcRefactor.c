@@ -416,7 +416,7 @@ int Abc_NtkRefactor( Abc_Ntk_t * pNtk, int nNodeSizeMax, int nMinSaved, int nCon
             } 
             continue;
         }
-         
+          
         if (fUpdateLevel){
             Abc_Obj_t * pFanin0 = Abc_ObjFanin0(pNode); 
             Abc_Obj_t * pFanin1 = Abc_ObjFanin1(pNode);         

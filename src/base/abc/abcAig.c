@@ -1357,7 +1357,8 @@ int Abc_AigUpdateLevel_rec(  Abc_Obj_t * pNode ){
     Abc_ObjForEachFanin( pNode, pNext, i )
     {
         global_level_updates += 1;  
-        Level = Abc_AigUpdateLevel_rec( Abc_ObjFanin0Ntk(pNext) );  
+        // Level = Abc_AigUpdateLevel_rec( Abc_ObjFanin0Ntk(pNext) );  
+        Level = Abc_AigUpdateLevel_rec( Abc_ObjRegular(pNext) );  
         if ( pNode->Level < (unsigned)Level )
             pNode->Level = Level;
     }   
@@ -1368,15 +1369,16 @@ int Abc_AigUpdateLevel_rec(  Abc_Obj_t * pNode ){
  
 void Abc_AigUpdateLevel_Lazy( Abc_Obj_t * pNode ){  
     // perform back dfs until the nodes are visited  
-    
-    abctime clk = Abc_Clock();
-    Abc_Obj_t * pFanin0 = Abc_ObjFanin0(pNode); 
-    Abc_Obj_t * pFanin1 = Abc_ObjFanin1(pNode);                 
-    if  (pNode->Level == Abc_MaxInt(pFanin0->Level, pFanin1->Level) +1 )
-        return; 
-    Abc_AigUpdateLevel_rec( pNode ); 
+    // may introduce bug here 
+    abctime clk = Abc_Clock(); 
+    Abc_Obj_t * pFanin0, * pFanin1; 
+    pFanin0 = Abc_ObjFanin0(pNode); 
+    pFanin1 = Abc_ObjFanin1(pNode); 
+    pNode -> Level = Abc_MaxInt(pFanin0->Level, pFanin1->Level) + 1; 
+    global_level_updates += 2; 
     global_aig_update_time += Abc_Clock() - clk;
-    
+    return;  
+    // Abc_AigUpdateLevel_rec( pNode );  
 }
     
 
@@ -1436,11 +1438,8 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
     if ( fUpdateLevel )
     {
         // using lazy updates to maintain the level structure  (batch updates) 
-        // abctime clk = Abc_Clock();
-        // Abc_AigUpdateLevelInc_int( pMan );
-        // global_update_time += Abc_Clock() - clk;
- 
-        abctime clk = Abc_Clock(); 
+        abctime clk = Abc_Clock();
+        Abc_AigUpdateLevelInc_int( pMan ); 
         if ( pMan->pNtkAig->vLevelsR )  
             Abc_AigUpdateLevelIncR_int( pMan ); 
         global_aig_update_time  += Abc_Clock() - clk;
@@ -1653,10 +1652,11 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
 
         if ( fUpdateLevel )
         {
-            // if (pFanout->fMarkA == 0){
-            //     pFanout->fMarkA = 1;
-            //     P_QuePush(pMan->qLevels, pFanout, 1.0 * pFanout->Level); 
-            // }   
+            if (pFanout->fMarkA == 0 && (pFanout->oLNode == NULL || pNew->oLNode == NULL || pFanout->fHandled == 1 || pNew->fHandled == 1) ){
+                pFanout->fMarkA = 1;
+                P_QuePush(pMan->qLevels, pFanout, 1.0 * pFanout->Level); 
+            }   
+
             if (pMan->pNtkAig->vLevelsR){
                 if (pFanout->fMarkB == 0){   // && pFanout->fUpdated == 0
                     pFanout->fMarkB = 1;
@@ -1709,15 +1709,19 @@ void Abc_AigUpdateLevelInc_int( Abc_Aig_t * pMan )
         {
             if ( Abc_ObjIsCo(pFanout) )
                 continue;
+            
+            // if (pNode ->oLNode != NULL)
+            //     continue; 
+
             // get the new level of this fanout
             LevelNew = 1 + Abc_MaxInt( Abc_ObjFanin0(pFanout)->Level, Abc_ObjFanin1(pFanout)->Level );
             if ( (int)pFanout->Level == LevelNew ) // no change
                 continue;
-             
+            
             // update the fanout level
             pFanout->Level = LevelNew;   
             // push the fanout to the queue
-            if (pFanout->fMarkA == 0){
+            if (pFanout->fMarkA == 0 && (pFanout->oLNode == NULL || pFanout->fHandled == 1)){
                 pFanout->fMarkA = 1;
                 P_QuePush(pMan->qLevels, pFanout, 1.0 * pFanout->Level); 
             }  

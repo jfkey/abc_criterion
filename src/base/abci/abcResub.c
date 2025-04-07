@@ -408,6 +408,9 @@ pManRes->timeTotal = Abc_Clock() - clkStart;
 
     // clean the data field
     Abc_NtkForEachObj( pNtk, pNode, i ) {
+        if (pNode != NULL && pNode->oLNode != NULL)
+            if ( pNode->Level != 1 + (unsigned)Abc_MaxInt( Abc_ObjFanin0(pNode)->Level, Abc_ObjFanin1(pNode)->Level ) )
+                printf( "Abc_AigCheck immediately after rewrite: Node \"%d\" (%d) handled has level that does not agree with the fanin levels.\n", pNode->fHandled, Abc_ObjId(pNode) );
         pNode->pData = NULL;
         if (pNode->fHandled)
             pNode->fHandled = 0; 
