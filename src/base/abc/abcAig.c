@@ -1368,9 +1368,15 @@ int Abc_AigUpdateLevel_rec(  Abc_Obj_t * pNode ){
  
 void Abc_AigUpdateLevel_Lazy( Abc_Obj_t * pNode ){  
     // perform back dfs until the nodes are visited  
-    abctime clk = Abc_Clock(); 
+    
+    abctime clk = Abc_Clock();
+    Abc_Obj_t * pFanin0 = Abc_ObjFanin0(pNode); 
+    Abc_Obj_t * pFanin1 = Abc_ObjFanin1(pNode);                 
+    if  (pNode->Level == Abc_MaxInt(pFanin0->Level, pFanin1->Level) +1 )
+        return; 
     Abc_AigUpdateLevel_rec( pNode ); 
     global_aig_update_time += Abc_Clock() - clk;
+    
 }
     
 
