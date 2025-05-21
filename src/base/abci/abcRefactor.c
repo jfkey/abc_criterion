@@ -399,8 +399,8 @@ int Abc_NtkRefactor( Abc_Ntk_t * pNtk, int nNodeSizeMax, int nMinSaved, int nCon
             continue;
         } 
         // stop if all nodes have been tried once
-        // if ( i >= nNodes )
-        //     break; 
+        if ( i >= nNodes )
+            break; 
    
         // skip persistant nodes
         if ( Abc_NodeIsPersistant(pNode) ){
@@ -431,6 +431,14 @@ int Abc_NtkRefactor( Abc_Ntk_t * pNtk, int nNodeSizeMax, int nMinSaved, int nCon
             if ( !pNode->fHandled )  
                 Abc_AigUpdateLevel_Lazy( pNode);
         }
+        // avoid persistently rewriting newly created nodes with zero gain
+        if (pNode->Id > max_node_id) {
+            if (fUpdateLevel)  pNode->fHandled = 1;  
+            i --;
+            continue;
+        }
+        
+        
  
 
         // compute a reconvergence-driven cut

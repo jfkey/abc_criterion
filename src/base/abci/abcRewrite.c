@@ -146,8 +146,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         pNode ->oLNode = oLNode;  
     }
     i = -1; 
-    int max_node_id = Abc_NtkObjNumMax(pNtk);
-    int current_node_id = 0;
+    int max_node_id = Abc_NtkObjNumMax(pNtk); 
     oList->pCurItera = List_PtrFirstNode(oList);
     for (; oList->pCurItera != NULL; oList->pCurItera = oList->pCurItera ->pNext) { 
         pNode = (Abc_Obj_t *) oList->pCurItera->pData; 
@@ -162,17 +161,11 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
             printf("Abc_NtkRewrite: node %d has been handled.\n", pNode->Id); 
             continue;
         }
-
-        if (fUpdateLevel) {
-            pNode->fHandled = 1;
-            Abc_AigUpdateLevel_Lazy( pNode);
-        } 
-        // printf("current node id %d\n", pNode->Id);
-
+      
         // iterative for original nodes and newly created nodes. 
         // // stop if all nodes have been tried once
-        // if ( i >= nNodes )
-        //     break;
+        if ( i >= nNodes )
+            break;
 
         // skip persistant nodes
         if ( Abc_NodeIsPersistant(pNode) ){
@@ -205,19 +198,26 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
             if (!Abc_ObjIsCi(pFanin1) && pFanin1->oLNode != NULL)
                 assert(pFanin1->fHandled);
              
-            Abc_AigUpdateLevel_Lazy( pNode); 
+            Abc_AigUpdateLevel_Lazy(pNode); 
         }
          
+        // avoid persistently rewriting newly created nodes with zero gain 
+        if (pNode->Id > max_node_id) {
+            if (fUpdateLevel)  pNode->fHandled = 1;  
+            i --;
+            continue;
+        }
        
+
         // for each cut, try to resynthesize it
         nGain = Rwr_NodeRewrite( pManRwr, pManCut, pNode, fUpdateLevel, fUseZeros, fPlaceEnable );
-        // mark the node as updated 
        
 
         if ( !(nGain > 0 || (nGain == 0 && fUseZeros)) ){
-            if (fUpdateLevel)  pNode->fHandled = 1; 
+            if (fUpdateLevel)  pNode->fHandled = 1;  
             continue;
         } 
+
         // if we end up here, a rewriting step is accepted
           
         // get hold of the new subgraph to be added to the AIG

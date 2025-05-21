@@ -37,3 +37,30 @@ do
 done
  
  
+
+logvz="${binary}_${dataname}_${libname}_vz_${timestamp}.log"
+#touch "$csv"
+touch "$logvz"
+#echo "name, command, input, output, lat, gates, edge, area, delay, lev, stime_gates, stime_gates%, stime_cap(ff), stime_cap%, stime_Area, stime_Area%, stime_Delay(ps), stime_Delay%, cut_time, delay_time, total_time" >> $csv
+
+# files=$(find "$2" -name "*.aig")
+# files=("/home/liujunfeng/benchmarks/mtm/sixteen.aig")
+
+for element in ${files[@]}
+do
+    echo "process $element"
+    command="read $element;  strash; print_stats; rewrite -v -z; print_stats;"
+    outputs=$(timeout $3 $1 -c "$command";)
+    echo $outputs >> $logvz 
+
+    command="read $element;  strash; print_stats; refactor -v -z; print_stats;"
+    outputs=$(timeout $3 $1 -c "$command";)
+    echo $outputs >> $logvz 
+
+    command="read $element;  strash; print_stats; resub -v -z; print_stats;"
+    outputs=$(timeout $3 $1 -c "$command";)
+    echo $outputs >> $logvz 
+done
+ 
+
+ 

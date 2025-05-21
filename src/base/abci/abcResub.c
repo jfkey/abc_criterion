@@ -213,8 +213,8 @@ int Abc_NtkResubstitute( Abc_Ntk_t * pNtk, int nCutMax, int nStepsMax, int nMinS
  
         // iterative for original nodes and newly created nodes. 
         // // stop if all nodes have been tried once
-        // if ( i >= nNodes )
-        //     break;
+        if ( i >= nNodes )
+            break;
  
         // skip persistant nodes
         if ( Abc_NodeIsPersistant(pNode) ){
@@ -246,6 +246,14 @@ int Abc_NtkResubstitute( Abc_Ntk_t * pNtk, int nCutMax, int nStepsMax, int nMinS
                 assert(pFanin1->fHandled); 
             Abc_AigUpdateLevel_Lazy( pNode); 
         }
+
+        // avoid persistently rewriting newly created nodes with zero gain 
+        if (pNode->Id > max_node_id) {
+            if (fUpdateLevel)  pNode->fHandled = 1;  
+            i --;
+            continue;
+        }
+        
 
          // compute a reconvergence-driven cut
 clk = Abc_Clock();
