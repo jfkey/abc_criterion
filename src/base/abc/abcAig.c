@@ -32,7 +32,7 @@ abctime global_aig_converter_time = 0;
 long int global_level_updates = 0;
 long int global_reverse_updates = 0;
 long int global_node_rewritten = 0; 
-
+long int global_reorder_nodes = 0;
 
 
  
@@ -138,6 +138,8 @@ static void        Abc_AigRemoveFromLevelStructure( Vec_Vec_t * vStruct, Abc_Obj
 static void        Abc_AigRemoveFromLevelStructureR( Vec_Vec_t * vStruct, Abc_Obj_t * pNode );
 
 static void        Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int fUpdateLevel );
+static void        Abc_AigReplaceIncLevelUpdate_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int fUpdateLevel );
+
 
 // new graph incremental algorithm for reverse level updates
 static void        Abc_AigUpdateLevelR_new( Abc_Aig_t * pMan, Abc_Obj_t * pOld);
@@ -1344,8 +1346,7 @@ int Abc_AigUpdateLevel_rec(  Abc_Obj_t * pNode ){
     if ( Abc_ObjIsCi(pNode) )
         return pNode->Level;
     // using fHandled to prune the nodes that have been rewritten 
-    if ( pNode->fHandled )
-        return pNode->Level;
+    
 
     assert( Abc_ObjIsNode( pNode ) || pNode->Type == ABC_OBJ_CONST1);
     // if this node is already visited, return
@@ -1380,8 +1381,7 @@ void Abc_AigUpdateLevel_Lazy( Abc_Obj_t * pNode ){
     return;  
     // Abc_AigUpdateLevel_rec( pNode );  
 }
-    
-
+  
 
 /**Function*************************************************************
 
@@ -1433,20 +1433,68 @@ int Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int
         Abc_AigReplaceInc_int( pMan, pOld, pNew, fUpdateLevel ); 
 
     }
-    // if (num_updates > 1) printf("##num updates %d node (%d)\n", num_updates, Abc_ObjId(pOld));
-    
+     
     if ( fUpdateLevel )
     {
         // using lazy updates to maintain the level structure  (batch updates) 
+        abctime clk = Abc_Clock();
+        // Abc_AigUpdateLevelInc_int( pMan ); 
+        if ( pMan->pNtkAig->vLevelsR )  
+            Abc_AigUpdateLevelIncR_int( pMan ); 
+        global_aig_update_time  += Abc_Clock() - clk;
+        
+    }   
+    return 1;
+}
+
+int Abc_AigReplaceIncLevelUpdate( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int fUpdateLevel )
+{
+    assert( Vec_PtrSize(pMan->vStackReplaceOld) == 0 );
+    assert( Vec_PtrSize(pMan->vStackReplaceNew) == 0 );
+    Vec_PtrPush( pMan->vStackReplaceOld, pOld );
+    Vec_PtrPush( pMan->vStackReplaceNew, pNew );
+     
+    int num_updates = 0;
+     
+    if (fUpdateLevel) {
+        // clear the priority queue
+        P_QueClear(pMan->qLevels);
+        P_QueClear(pMan->qLevelsR);
+        
+        assert(pMan->vTopoAff != NULL);
+        Vec_PtrClear(pMan->vTopoAff);
+        // // the first node is the order of pTo node, 
+        // assert(Abc_ObjRegular(pOld)->oLNode != NULL);
+        // Vec_PtrPush(pMan->vTopoAff, Abc_ObjRegular(pOld)->oLNode);
+    }
+    // process the replacements
+    while ( Vec_PtrSize(pMan->vStackReplaceOld) )
+    {
+        num_updates++;
+        pOld = (Abc_Obj_t *)Vec_PtrPop( pMan->vStackReplaceOld );
+        pNew = (Abc_Obj_t *)Vec_PtrPop( pMan->vStackReplaceNew );
+
+       
+        if ( Abc_ObjLevel(pOld) < pMan->nLevelMin )
+            pMan->nLevelMin = Abc_ObjLevel(pOld);
+
+        if ( JF_DEBUG_REWRITE )
+            printf("##replace old %d new  %d\n", Abc_ObjId(pOld), Abc_ObjId(pNew));
+        if ( Abc_ObjFanoutNum(pOld) == 0 )
+            //return 0;
+            continue;
+        Abc_AigReplaceIncLevelUpdate_int( pMan, pOld, pNew, fUpdateLevel );  
+    }
+     
+    if ( fUpdateLevel )
+    {
         abctime clk = Abc_Clock();
         Abc_AigUpdateLevelInc_int( pMan ); 
         if ( pMan->pNtkAig->vLevelsR )  
             Abc_AigUpdateLevelIncR_int( pMan ); 
         global_aig_update_time  += Abc_Clock() - clk;
         
-    }  
-    
-        
+    }   
     return 1;
 }
 
@@ -1475,8 +1523,7 @@ int Abc_AigReplaceUpdateAff( Abc_Aig_t * pMan ){
         return 0;
     if ( pMan->vTopoAff == NULL || Vec_PtrSize(pMan->vTopoAff) == 0 )
         return 1; // nothing to update
-
-    oNodeFirst = pMan->oList->pCurItera; 
+    oNodeFirst = pMan->oList->pCurItera;    
     // update the topological order of the nodes in the affected vector 
     Vec_PtrForEachEntry(Abc_Obj_t*, pMan->vTopoAff, pNode, i){ 
         if (pNode == NULL)
@@ -1484,9 +1531,12 @@ int Abc_AigReplaceUpdateAff( Abc_Aig_t * pMan ){
           
         // clean the mark
         pNode ->fMarkC = 0;
-        // skip the nodes that are not in the old order
-        if (pNode -> oLNode == NULL)
-            continue; 
+        if (pNode -> fHandled ) continue; 
+  
+        // insert the newly created nodes into oList
+        // // skip the nodes that are not in the old order
+        // if (pNode -> oLNode == NULL)
+        //     continue;  
 
         // create new order for the nodes in AFF
         newOrder = List_PtrInsertAfter(oList, oNodeFirst, pNode); 
@@ -1495,8 +1545,9 @@ int Abc_AigReplaceUpdateAff( Abc_Aig_t * pMan ){
         List_PtrRemoveNode(oList, pNode->oLNode);
         // update the node's order
         pNode->oLNode = newOrder;
-        oNodeFirst = newOrder;          
-    }
+        oNodeFirst = newOrder; 
+        global_reorder_nodes++;
+    } 
     global_aig_update_time += Abc_Clock() - clk; 
     // free the nodes in vAffTmp
     Vec_PtrErase(pMan->vTopoAff);
@@ -1652,7 +1703,121 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
 
         if ( fUpdateLevel )
         {
-            if (pFanout->fMarkA == 0 && (pFanout->oLNode == NULL || pNew->oLNode == NULL || pFanout->fHandled == 1 || pNew->fHandled == 1) ){
+            // if (pFanout->fMarkA == 0){
+            //     pFanout->fMarkA = 1;
+            //     P_QuePush(pMan->qLevels, pFanout, 1.0 * pFanout->Level); 
+            // }   
+
+            if (pMan->pNtkAig->vLevelsR){
+                if (pFanout->fMarkB == 0){   // && pFanout->fUpdated == 0
+                    pFanout->fMarkB = 1;
+                    P_QuePush(pMan->qLevelsR, pFanout, 1.0 * Abc_ObjReverseLevel(pFanout)); 
+                }
+            } 
+        }
+
+        // the fanout has changed, update EXOR status of its fanouts
+        Abc_ObjForEachFanout( pFanout, pFanoutFanout, v )
+            if ( Abc_AigNodeIsAnd(pFanoutFanout) )
+                pFanoutFanout->fExor = Abc_NodeIsExorType(pFanoutFanout);
+    }  
+    // if the node has no fanouts left, remove its MFFC
+    if ( Abc_ObjFanoutNum(pOld) == 0 )
+        Abc_AigDeleteNodeInc( pMan, pOld );     
+    // clear the candidate for reverse level maintanance
+    if (!fUpdateLevel) { 
+        Abc_Obj_t * pNodeTmp;
+        while (P_QueSize(pMan->qLevelsR) > 0){
+            pNodeTmp = (Abc_Obj_t *)P_QuePop(pMan->qLevelsR);
+            pNodeTmp->fMarkB = 0;
+        }
+    }
+} 
+
+void Abc_AigReplaceIncLevelUpdate_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int fUpdateLevel )
+{
+    Abc_Obj_t * pFanin1, * pFanin2, * pFanout, * pFanoutNew, * pFanoutFanout;
+    int k, v, iFanin;
+    // int minFanoutLevel = ABC_INFINITY; 
+    int isFirst = 1; 
+
+    // make sure the old node is regular and has fanouts
+    // (the new node can be complemented and can have fanouts)
+    assert( !Abc_ObjIsComplement(pOld) );
+    assert( Abc_ObjFanoutNum(pOld) > 0 );
+    // look at the fanouts of old node
+    Abc_NodeCollectFanouts( pOld, pMan->vNodes );
+    Vec_PtrForEachEntry( Abc_Obj_t *, pMan->vNodes, pFanout, k )
+    {
+        if ( Abc_ObjIsCo(pFanout) )
+        {
+            
+            pFanin1 = Abc_ObjRegular( pNew );
+            if ( pFanin1->fMarkB )
+                pFanin1->fMarkB = 0; 
+            // Lemma . 
+            if ( fUpdateLevel && pMan->pNtkAig->vLevelsR )
+            {
+                Abc_ObjSetReverseLevel( pFanin1, Abc_ObjReverseLevel(pOld) );
+                assert( pFanin1->fMarkB == 0 );
+                if ( !Abc_ObjIsCi(pFanin1) )
+                {
+                    pFanin1->fMarkB = 1; 
+                    P_QuePush(pMan->qLevelsR, pFanin1, 1.0 * Abc_ObjReverseLevel(pFanin1)); 
+                }
+            }
+            Abc_ObjPatchFanin( pFanout, pOld, pNew );            
+            continue;  
+        }
+        // find the old node as a fanin of this fanout
+        iFanin = Vec_IntFind( &pFanout->vFanins, pOld->Id );
+        assert( iFanin == 0 || iFanin == 1 );
+        // get the new fanin
+        pFanin1 = Abc_ObjNotCond( pNew, Abc_ObjFaninC(pFanout, iFanin) );
+        assert( Abc_ObjRegular(pFanin1) != pFanout );
+        // get another fanin
+        pFanin2 = Abc_ObjChild( pFanout, iFanin ^ 1 );
+        assert( Abc_ObjRegular(pFanin2) != pFanout );
+        // check if the node with these fanins exists
+        if ( (pFanoutNew = Abc_AigAndLookup( pMan, pFanin1, pFanin2 )) )
+        { // such node exists (it may be a constant)
+            // schedule replacement of the old fanout by the new fanout  
+            Vec_PtrPush( pMan->vStackReplaceOld, pFanout );
+            Vec_PtrPush( pMan->vStackReplaceNew, pFanoutNew );
+            continue;
+        }
+        // such node does not exist - modify the old fanout node 
+        // (this way the change will not propagate all the way to the COs)
+        assert( Abc_ObjRegular(pFanin1) != Abc_ObjRegular(pFanin2) );             
+        
+        if (isFirst && fUpdateLevel) {
+            abctime clk = Abc_Clock();
+            Abc_AigReplaceFindAff( pMan, Abc_ObjRegular(pNew)); 
+            global_aig_update_time += Abc_Clock() - clk;
+            // // print the affected nodes
+            // Abc_Obj_t * pNodeTmp;
+            // int i = 0; 
+            // printf("\t topoAff: ");
+            // Vec_PtrForEachEntry(Abc_Obj_t*, pMan->vTopoAff, pNodeTmp, i){
+            //     printf("%d ", Abc_ObjId(pNodeTmp));
+            // }
+            // printf("\n"); 
+            isFirst = 0;
+        }
+ 
+        // remove the old fanout node from the structural hashing table
+        Abc_AigAndDelete( pMan, pFanout );
+        // remove the fanins of the old fanout
+        Abc_ObjRemoveFanins( pFanout );
+        // recreate the old fanout with new fanins and add it to the table
+        Abc_AigAndCreateFrom( pMan, pFanin1, pFanin2, pFanout );
+
+ 
+        assert( Abc_AigNodeIsAcyclic(pFanout, pFanout) );
+
+        if ( fUpdateLevel )
+        {
+            if (pFanout->fMarkA == 0){
                 pFanout->fMarkA = 1;
                 P_QuePush(pMan->qLevels, pFanout, 1.0 * pFanout->Level); 
             }   
@@ -1673,8 +1838,15 @@ void Abc_AigReplaceInc_int( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew
     // if the node has no fanouts left, remove its MFFC
     if ( Abc_ObjFanoutNum(pOld) == 0 )
         Abc_AigDeleteNodeInc( pMan, pOld );     
+    // clear the candidate for reverse level maintanance
+    if (!fUpdateLevel) { 
+        Abc_Obj_t * pNodeTmp;
+        while (P_QueSize(pMan->qLevelsR) > 0){
+            pNodeTmp = (Abc_Obj_t *)P_QuePop(pMan->qLevelsR);
+            pNodeTmp->fMarkB = 0;
+        }
+    }
 }
-
 
 
 /**Function*************************************************************
@@ -1721,7 +1893,8 @@ void Abc_AigUpdateLevelInc_int( Abc_Aig_t * pMan )
             // update the fanout level
             pFanout->Level = LevelNew;   
             // push the fanout to the queue
-            if (pFanout->fMarkA == 0 && (pFanout->oLNode == NULL || pFanout->fHandled == 1)){
+            // if (pFanout->fMarkA == 0 && (pFanout->oLNode == NULL || pFanout->fHandled == 1)){
+            if (pFanout->fMarkA == 0){
                 pFanout->fMarkA = 1;
                 P_QuePush(pMan->qLevels, pFanout, 1.0 * pFanout->Level); 
             }  
@@ -1774,7 +1947,7 @@ void Abc_AigUpdateLevelIncR_int( Abc_Aig_t * pMan )
     } 
 }
 
-
+   
 
 void Abc_AigDeleteNodeInc( Abc_Aig_t * pMan, Abc_Obj_t * pNode )
 {
@@ -1816,8 +1989,7 @@ void Abc_AigDeleteNodeInc( Abc_Aig_t * pMan, Abc_Obj_t * pNode )
         Vec_PtrPushUnique( pMan->vUpdatedNets, pNode0 );
         Vec_PtrPushUnique( pMan->vUpdatedNets, pNode1 );
     }
-    // printf("delete node %d \n", pNode->Id); 
-
+     
     // duplicate the list node, with null pData. 
     // pMan ->oList != NULL   :  when delete the node in fUpdateLevel mode
     // pNode ->oLNode != NULL :  to skip the new created node 
@@ -1843,12 +2015,35 @@ void Abc_AigDeleteNodeInc( Abc_Aig_t * pMan, Abc_Obj_t * pNode )
         
     // remove the node from the network
     Abc_NtkDeleteObj( pNode );
+
     
     // call recursively for the fanins
-    if ( Abc_ObjIsNode(pNode0) && pNode0->vFanouts.nSize == 0 )
+    if ( Abc_ObjIsNode(pNode0) && pNode0->vFanouts.nSize == 0 ) {
         Abc_AigDeleteNodeInc( pMan, pNode0 );
-    if ( Abc_ObjIsNode(pNode1) && pNode1->vFanouts.nSize == 0 )
+    } else {
+        // if the node is not handled and not in the queue, push it to the queue, reverse level maintanance
+        if (pNode0->fHandled == 0 && pNode0->fMarkB == 0 && Abc_ObjIsNode(pNode0)) {
+            pNode0->fMarkB = 1;
+            P_QuePush(pMan->qLevelsR, pNode0, 1.0 * Abc_ObjReverseLevel(pNode0));
+        }
+    }
+        
+
+    if ( Abc_ObjIsNode(pNode1) && pNode1->vFanouts.nSize == 0 ) {
         Abc_AigDeleteNodeInc( pMan, pNode1 );
+    } else {
+        // if the node is not handled and not in the queue, push it to the queue, reverse level maintanance
+        if (pNode1->fHandled == 0 && pNode1->fMarkB == 0 && Abc_ObjIsNode(pNode1)) {
+            pNode1->fMarkB = 1;
+            P_QuePush(pMan->qLevelsR, pNode1, 1.0 * Abc_ObjReverseLevel(pNode1));
+        }
+    }
+
+    
+    // if (pNode0->fHandled == 0 && pNode0->fMarkB == 0) {
+    //         pNode0->fMarkB = 1;
+    //         P_QuePush(pMan->qLevelsR, pNode0, 1.0 * Abc_ObjReverseLevel(pNode0));
+    // }
 }
 
 

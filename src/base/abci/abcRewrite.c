@@ -34,6 +34,7 @@ extern abctime global_aig_converter_time;
 extern long int global_level_updates;
 extern long int global_reverse_updates;
 extern long int global_node_rewritten; 
+extern long int global_reorder_nodes;
 /*
     The ideas realized in this package are inspired by the paper:
     Per Bjesse, Arne Boralv, "DAG-aware circuit compression for 
@@ -93,7 +94,8 @@ int Abc_NtkRewrite( Abc_Ntk_t * pNtk, int fUpdateLevel, int fUseZeros, int fVerb
     global_aig_converter_time = 0;  
     global_level_updates = 0;
     global_reverse_updates = 0;
-    global_node_rewritten = 0; 
+    global_node_rewritten = 0;
+    global_reorder_nodes = 0;
 
 /*
     {
@@ -143,8 +145,9 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         assert(oLNode != NULL);
         pNode ->oLNode = oLNode;  
     }
-    
     i = -1; 
+    int max_node_id = Abc_NtkObjNumMax(pNtk);
+    int current_node_id = 0;
     oList->pCurItera = List_PtrFirstNode(oList);
     for (; oList->pCurItera != NULL; oList->pCurItera = oList->pCurItera ->pNext) { 
         pNode = (Abc_Obj_t *) oList->pCurItera->pData; 
@@ -154,15 +157,23 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
         // we delete the node from AIG but do not remove the order from the linked list 
         if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
         Extra_ProgressBarUpdate( pProgress, i, NULL );
-
+  
         if (pNode->fHandled){
             printf("Abc_NtkRewrite: node %d has been handled.\n", pNode->Id); 
             continue;
         }
 
-        // stop if all nodes have been tried once
-        if ( i >= nNodes )
-            break;
+        if (fUpdateLevel) {
+            pNode->fHandled = 1;
+            Abc_AigUpdateLevel_Lazy( pNode);
+        } 
+        // printf("current node id %d\n", pNode->Id);
+
+        // iterative for original nodes and newly created nodes. 
+        // // stop if all nodes have been tried once
+        // if ( i >= nNodes )
+        //     break;
+
         // skip persistant nodes
         if ( Abc_NodeIsPersistant(pNode) ){
             if (fUpdateLevel) {
@@ -171,7 +182,7 @@ Rwr_ManAddTimeCuts( pManRwr, Abc_Clock() - clk );
             } 
             continue;
         }
-            
+  
         // skip the nodes with many fanouts
         if ( Abc_ObjFanoutNum(pNode) > 1000 ){
             if (fUpdateLevel) {
@@ -230,8 +241,7 @@ Rwr_ManAddTimeUpdate( pManRwr, Abc_Clock() - clk );
     if (fCompl) Dec_GraphComplement(pGraph);
         // use the array of changed nodes to update placement
 //        if ( fPlaceEnable )
-//            Abc_PlaceUpdate( vAddedCells, vUpdatedNets );
-        
+//            Abc_PlaceUpdate( vAddedCells, vUpdatedNets ); 
         global_node_rewritten += 1; 
         if ( fUpdateLevel ){
             pNode->fHandled = 1;
@@ -255,7 +265,7 @@ Rwr_ManAddTimeTotal( pManRwr, Abc_Clock() - clkStart );
     printf("###global_level_updates \t %ld\n",    global_level_updates);   
     printf("###global_reverse_updates \t %ld\n",  global_reverse_updates);   
     printf("###global_node_rewritten \t %ld\n",   global_node_rewritten);       
- 
+    printf("###global_reorder_nodes \t %ld\n",    global_reorder_nodes);
 
     // print stats
     pManRwr->nNodesEnd = Abc_NtkNodeNum(pNtk);
@@ -273,12 +283,14 @@ Rwr_ManAddTimeTotal( pManRwr, Abc_Clock() - clkStart );
     List_Ptr_Iterator_t * oLIter = (List_Ptr_Iterator_t*)ABC_ALLOC(List_Ptr_Iterator_t, 1);
     List_PtrForEach(List_Ptr_t*, oList, pNode, oLIter ){ 
         if (pNode == NULL || !Abc_ObjIsNode(pNode)) continue;
+        if (pNode->Id > max_node_id) {
+            pNode->fHandled = 0;
+            continue;
+        }
         // printf("after delete node: %d \n", pNode->Id);
         if ( pNode->Level != 1 + (unsigned)Abc_MaxInt( Abc_ObjFanin0(pNode)->Level, Abc_ObjFanin1(pNode)->Level ) )
             printf( "Abc_AigCheck immediately after rewrite: Node \"%d\" (%d) handled has level that does not agree with the fanin levels.\n", pNode->fHandled, Abc_ObjId(pNode) );
-        if (pNode->fHandled){
-            pNode->fHandled = 0; 
-        }
+        pNode->fHandled = 0;  
     }
     List_PtrClear(oList);
     ABC_FREE(oLIter);
@@ -301,8 +313,10 @@ Rwr_ManAddTimeTotal( pManRwr, Abc_Clock() - clkStart );
     // fix the levels
     if ( RetValue >= 0 )
     {
-        if ( fUpdateLevel )
+        if ( fUpdateLevel ){
+            Abc_NtkLevel( pNtk );
             Abc_NtkStopReverseLevels( pNtk );
+        } 
         else
             Abc_NtkLevel( pNtk );
         // check

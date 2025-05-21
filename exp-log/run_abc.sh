@@ -5,7 +5,7 @@
 # eg: bash run_abc.sh /home/liujunfeng/NewCriterion/abc_criterion/abc_criterion/build/abc_efficient  /home/liujunfeng/benchmarks/mtm/exp/ 10000m
 
 # bash run_abc.sh /home/liujunfeng/NewCriterion/abc_criterion/abc_criterion/build/abc_static  /home/liujunfeng/benchmarks/mtm/exp/ 10000m
-
+# bash run_abc.sh /home/liujunfeng/NewCriterion/abc_criterion/abc_criterion/build/abc  /home/liujunfeng/benchmarks/larger_aig/sim-LSV_exp/benchmarks_dc2syn2/ 10000m
  
 ####################################################################
 binary=$(echo "$1" | awk -F "/" '{print $NF}')
@@ -23,8 +23,17 @@ files=$(find "$2" -name "*.aig")
 for element in ${files[@]}
 do
     echo "process $element"
-    command="read $element;  strash; print_stats; rewrite -v; print_stats; read $element;  strash; print_stats; refactor -v; print_stats; read $element;  strash; print_stats; resub -v; print_stats;"
+    command="read $element;  strash; print_stats; rewrite -v; print_stats;"
+    outputs=$(timeout $3 $1 -c "$command";)
+    echo $outputs >> $log 
+
+    command="read $element;  strash; print_stats; refactor -v; print_stats;"
+    outputs=$(timeout $3 $1 -c "$command";)
+    echo $outputs >> $log 
+
+    command="read $element;  strash; print_stats; resub -v; print_stats;"
     outputs=$(timeout $3 $1 -c "$command";)
     echo $outputs >> $log 
 done
+ 
  

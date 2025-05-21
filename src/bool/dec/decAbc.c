@@ -176,7 +176,7 @@ int Dec_GraphToNetworkCount( Abc_Obj_t * pRoot, Dec_Graph_t * pGraph, int NodeMa
     if ( Dec_GraphIsConst(pGraph) || Dec_GraphIsVar(pGraph) )
         return 0;
     // set the levels of the leaves
-    Dec_GraphForEachLeaf( pGraph, pNode, i )  
+    Dec_GraphForEachLeaf( pGraph, pNode, i ) 
         pNode->Level = Abc_ObjRegular((Abc_Obj_t *)pNode->pFunc)->Level;
  
     // compute the AIG size after adding the internal nodes
@@ -208,8 +208,7 @@ int Dec_GraphToNetworkCount( Abc_Obj_t * pRoot, Dec_Graph_t * pGraph, int NodeMa
                 return -1;
         }
         // count the number of new levels
-        LevelNew = 1 + Abc_MaxInt( pNode0->Level, pNode1->Level );
-
+        LevelNew = 1 + Abc_MaxInt( pNode0->Level, pNode1->Level ); 
         // lazy update strategy
         // // if current level is larger or equal to the minimum level, perform batch update  
         // if ( ABC_INFINITY != LevelMax ){
@@ -267,6 +266,40 @@ int Dec_GraphUpdateNetwork( Abc_Obj_t * pRoot, Dec_Graph_t * pGraph, int fUpdate
     return RetValue;
 }
  
+
+/**Function*************************************************************
+
+  Synopsis    [Replaces MFFC of the node by the new factored form.
+  1. level updates are performed using forward propagation
+  2. reverse level is pruned, as same as Dec_GraphUpdateNetwork.
+  ]
+
+  Description []
+               
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+int Dec_GraphUpdateNetworkLevelUpdate( Abc_Obj_t * pRoot, Dec_Graph_t * pGraph, int fUpdateLevel, int nGain)
+{
+    extern Abc_Obj_t *    Dec_GraphToNetwork( Abc_Ntk_t * pNtk, Dec_Graph_t * pGraph );
+    Abc_Obj_t * pRootNew;
+    Abc_Ntk_t * pNtk = pRoot->pNtk;
+    int nNodesNew, nNodesOld, RetValue;
+    nNodesOld = Abc_NtkNodeNum(pNtk);
+    // create the new structure of nodes
+    pRootNew = Dec_GraphToNetwork( pNtk, pGraph );
+    // remove the old nodes
+    RetValue = Abc_AigReplaceIncLevelUpdate( (Abc_Aig_t *)pNtk->pManFunc, pRoot, pRootNew, fUpdateLevel );
+
+    // compare the gains
+    nNodesNew = Abc_NtkNodeNum(pNtk);
+    //assert( nGain <= nNodesOld - nNodesNew );
+    return RetValue;
+}
+ 
+
 /**Function*************************************************************
 
   Synopsis    [Transforms the decomposition graph into the AIG.]

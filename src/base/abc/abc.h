@@ -573,7 +573,8 @@ extern ABC_DLL void                Abc_AigUpdateLevel_Trigger( Abc_Aig_t * pMan,
 extern ABC_DLL void                Abc_AigUpdateLevel_Lazy(Abc_Obj_t * pNode );
 extern ABC_DLL int                 Abc_AigReplaceUpdateAff( Abc_Aig_t * pMan);
 extern ABC_DLL List_Ptr_t *        Abc_AigGetOList(Abc_Aig_t * pMan);
-
+extern ABC_DLL void                Abc_AigCreateTopoNodes( Abc_Aig_t * pMan, Abc_Obj_t * pNew, Abc_Obj_t * p0, Abc_Obj_t * p1 );
+extern ABC_DLL int                Abc_AigQueryUnhandledLevel( Abc_Obj_t * pNode );
 
 extern ABC_DLL Abc_Obj_t *        Abc_AigConst1( Abc_Ntk_t * pNtk );
 extern ABC_DLL Abc_Obj_t *        Abc_AigAnd( Abc_Aig_t * pMan, Abc_Obj_t * p0, Abc_Obj_t * p1 );
@@ -585,7 +586,8 @@ extern ABC_DLL Abc_Obj_t *        Abc_AigXor( Abc_Aig_t * pMan, Abc_Obj_t * p0, 
 extern ABC_DLL Abc_Obj_t *        Abc_AigMux( Abc_Aig_t * pMan, Abc_Obj_t * pC, Abc_Obj_t * p1, Abc_Obj_t * p0 );
 extern ABC_DLL Abc_Obj_t *        Abc_AigMiter( Abc_Aig_t * pMan, Vec_Ptr_t * vPairs, int fImplic );
 extern ABC_DLL int                Abc_AigReplace( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int  fUpdateLevel );
-extern ABC_DLL int                Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int  fUpdateLevel );
+extern ABC_DLL int                Abc_AigReplaceInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int  fUpdateLevel ); 
+extern ABC_DLL int                Abc_AigReplaceIncLevelUpdate( Abc_Aig_t * pMan, Abc_Obj_t * pOld, Abc_Obj_t * pNew, int  fUpdateLevel );
 extern ABC_DLL void               Abc_AigDeleteNode( Abc_Aig_t * pMan, Abc_Obj_t * pOld );
 extern ABC_DLL void               Abc_AigDeleteNodeInc( Abc_Aig_t * pMan, Abc_Obj_t * pOld );
 

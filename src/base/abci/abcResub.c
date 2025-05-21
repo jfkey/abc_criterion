@@ -31,7 +31,7 @@ extern abctime global_aig_converter_time;
 extern long int global_level_updates;
 extern long int global_reverse_updates;
 extern long int global_node_rewritten; 
- 
+extern long int global_reorder_nodes;
 ////////////////////////////////////////////////////////////////////////
 ///                        DECLARATIONS                              ///
 ////////////////////////////////////////////////////////////////////////
@@ -131,20 +131,10 @@ static int           Abc_CutVolumeCheck( Abc_Obj_t * pNode, Vec_Ptr_t * vLeaves 
 ///                     FUNCTION DEFINITIONS                         ///
 ////////////////////////////////////////////////////////////////////////
 
-/**Function*************************************************************
-
-  Synopsis    [Performs incremental resynthesis of the AIG.]
-
-  Description []
-               
-  SideEffects []
-
-  SeeAlso     []
-
-***********************************************************************/
 int Abc_NtkResubstitute( Abc_Ntk_t * pNtk, int nCutMax, int nStepsMax, int nMinSaved, int nLevelsOdc, int fUpdateLevel, int fVerbose, int fVeryVerbose )
 {
     extern int           Dec_GraphUpdateNetwork( Abc_Obj_t * pRoot, Dec_Graph_t * pGraph, int fUpdateLevel, int nGain );
+    extern int           Dec_GraphUpdateNetworkLevelUpdate( Abc_Obj_t * pRoot, Dec_Graph_t * pGraph, int fUpdateLevel, int nGain );
     ProgressBar * pProgress;
     Abc_ManRes_t * pManRes;
     Abc_ManCut_t * pManCut;
@@ -154,6 +144,7 @@ int Abc_NtkResubstitute( Abc_Ntk_t * pNtk, int nCutMax, int nStepsMax, int nMinS
     Abc_Obj_t * pNode;
     abctime clk, clkStart = Abc_Clock();
     int i, nNodes;
+    int max_node_id = Abc_NtkObjNumMax(pNtk);
 
     assert( Abc_NtkIsStrash(pNtk) );
 
@@ -165,6 +156,7 @@ int Abc_NtkResubstitute( Abc_Ntk_t * pNtk, int nCutMax, int nStepsMax, int nMinS
     global_level_updates = 0;
     global_reverse_updates = 0;
     global_node_rewritten = 0; 
+    global_reorder_nodes = 0;
 
     // cleanup the AIG
     Abc_AigCleanup((Abc_Aig_t *)pNtk->pManFunc);
@@ -203,7 +195,7 @@ int Abc_NtkResubstitute( Abc_Ntk_t * pNtk, int nCutMax, int nStepsMax, int nMinS
         assert(oLNode != NULL);
         pNode ->oLNode = oLNode;  
     }
-    i = -1; 
+    i = -1;  
     oList->pCurItera = List_PtrFirstNode(oList);
     for (; oList->pCurItera != NULL; oList->pCurItera = oList->pCurItera ->pNext) { 
         pNode = (Abc_Obj_t *) oList->pCurItera->pData; 
@@ -218,10 +210,12 @@ int Abc_NtkResubstitute( Abc_Ntk_t * pNtk, int nCutMax, int nStepsMax, int nMinS
             printf("Abc_NtkRewrite: node %d has been handled.\n", pNode->Id); 
             continue;
         }
-
-        // stop if all nodes have been tried once
-        if ( i >= nNodes )
-            break;
+ 
+        // iterative for original nodes and newly created nodes. 
+        // // stop if all nodes have been tried once
+        // if ( i >= nNodes )
+        //     break;
+ 
         // skip persistant nodes
         if ( Abc_NodeIsPersistant(pNode) ){
             if (fUpdateLevel) {
@@ -244,13 +238,12 @@ int Abc_NtkResubstitute( Abc_Ntk_t * pNtk, int nCutMax, int nStepsMax, int nMinS
         if (fUpdateLevel){
             Abc_Obj_t * pFanin0 = Abc_ObjFanin0(pNode); 
             Abc_Obj_t * pFanin1 = Abc_ObjFanin1(pNode);         
-            if (pFanin0 != NULL) 
-            if (!Abc_ObjIsCi(pFanin0) && pFanin0->oLNode != NULL)
+            if (pFanin0 != NULL && pFanin0->oLNode != NULL)
+            if (!Abc_ObjIsCi(pFanin0) ) 
                 assert(pFanin0->fHandled);
-            if (pFanin1 != NULL)
-            if (!Abc_ObjIsCi(pFanin1) && pFanin1->oLNode != NULL)
-                assert(pFanin1->fHandled);
-             
+            if (pFanin1 != NULL && pFanin1->oLNode != NULL)
+            if (!Abc_ObjIsCi(pFanin1) )  
+                assert(pFanin1->fHandled); 
             Abc_AigUpdateLevel_Lazy( pNode); 
         }
 
@@ -303,10 +296,10 @@ pManRes->timeRes += Abc_Clock() - clk;
 */
         // acceptable replacement found, update the graph
 clk = Abc_Clock();
-        Dec_GraphUpdateNetwork( pNode, pFForm, fUpdateLevel, pManRes->nLastGain );
+        Dec_GraphUpdateNetworkLevelUpdate( pNode, pFForm, fUpdateLevel, pManRes->nLastGain );
 pManRes->timeNtk += Abc_Clock() - clk;
         Dec_GraphFree( pFForm );
-        global_node_rewritten ++; 
+        global_node_rewritten ++;
         if ( fUpdateLevel ){
             pNode->fHandled = 1;
             if (!Abc_AigReplaceUpdateAff( (Abc_Aig_t *)pNtk->pManFunc)){
@@ -315,72 +308,6 @@ pManRes->timeNtk += Abc_Clock() - clk;
             } 
         }  
     }
-
-//     Abc_NtkForEachNode( pNtk, pNode, i )
-//     {
-//         Extra_ProgressBarUpdate( pProgress, i, NULL );
-//         // skip the constant node
-// //        if ( Abc_NodeIsConst(pNode) )
-// //            continue;
-//         // skip persistant nodes
-//         if ( Abc_NodeIsPersistant(pNode) )
-//             continue;
-//         // skip the nodes with many fanouts
-//         if ( Abc_ObjFanoutNum(pNode) > 1000 )
-//             continue;
-//         // stop if all nodes have been tried once
-//         if ( i >= nNodes )
-//             break;
-
-//         // compute a reconvergence-driven cut
-// clk = Abc_Clock();
-//         vLeaves = Abc_NodeFindCut( pManCut, pNode, 0 );
-// //        vLeaves = Abc_CutFactorLarge( pNode, nCutMax );
-// pManRes->timeCut += Abc_Clock() - clk;
-// /*
-//         if ( fVerbose && vLeaves )
-//         printf( "Node %6d : Leaves = %3d. Volume = %3d.\n", pNode->Id, Vec_PtrSize(vLeaves), Abc_CutVolumeCheck(pNode, vLeaves) );
-//         if ( vLeaves == NULL )
-//             continue;
-// */
-//         // get the don't-cares
-//         if ( pManOdc )
-//         {
-// clk = Abc_Clock();
-//             Abc_NtkDontCareClear( pManOdc );
-//             Abc_NtkDontCareCompute( pManOdc, pNode, vLeaves, pManRes->pCareSet );
-// pManRes->timeTruth += Abc_Clock() - clk;
-//         }
-
-//         // evaluate this cut
-// clk = Abc_Clock();
-//         pFForm = Abc_ManResubEval( pManRes, pNode, vLeaves, nStepsMax, fUpdateLevel, fVerbose );
-// //        Vec_PtrFree( vLeaves );
-// //        Abc_ManResubCleanup( pManRes );
-// pManRes->timeRes += Abc_Clock() - clk;
-//         if ( pFForm == NULL )
-//             continue;
-//         if ( pManRes->nLastGain < nMinSaved )
-//         {
-//             Dec_GraphFree( pFForm );
-//             continue;
-//         }
-//         pManRes->nTotalGain += pManRes->nLastGain;
-// /*
-//         if ( pManRes->nLeaves == 4 && pManRes->nMffc == 2 && pManRes->nLastGain == 1 )
-//         {
-//             printf( "%6d :  L = %2d. V = %2d. Mffc = %2d. Divs = %3d.   Up = %3d. Un = %3d. B = %3d.\n", 
-//                    pNode->Id, pManRes->nLeaves, Abc_CutVolumeCheck(pNode, vLeaves), pManRes->nMffc, pManRes->nDivs, 
-//                    pManRes->vDivs1UP->nSize, pManRes->vDivs1UN->nSize, pManRes->vDivs1B->nSize );
-//             Abc_ManResubPrintDivs( pManRes, pNode, vLeaves );
-//         }
-// */
-//         // acceptable replacement found, update the graph
-// clk = Abc_Clock();
-//         Dec_GraphUpdateNetwork( pNode, pFForm, fUpdateLevel, pManRes->nLastGain );
-// pManRes->timeNtk += Abc_Clock() - clk;
-//         Dec_GraphFree( pFForm );
-//     }
 
     Extra_ProgressBarStop( pProgress );
 pManRes->timeTotal = Abc_Clock() - clkStart;
@@ -396,6 +323,7 @@ pManRes->timeTotal = Abc_Clock() - clkStart;
     printf("###global_level_updates \t %ld\n",    global_level_updates);   
     printf("###global_reverse_updates \t %ld\n",  global_reverse_updates);   
     printf("###global_node_rewritten \t %ld\n",   global_node_rewritten);      
+    printf("###global_reorder_nodes \t %ld\n",    global_reorder_nodes);
 
     // print statistics
     if ( fVerbose )
@@ -406,14 +334,15 @@ pManRes->timeTotal = Abc_Clock() - clkStart;
     Abc_NtkManCutStop( pManCut );
     if ( pManOdc ) Abc_NtkDontCareFree( pManOdc );
 
-    // clean the data field
+    // clean the data field  
     Abc_NtkForEachObj( pNtk, pNode, i ) {
-        if (pNode != NULL && pNode->oLNode != NULL)
+        pNode->pData = NULL;  
+
+        if (Abc_ObjIsNode(pNode) && pNode->fHandled == 1 && pNode->Id < max_node_id) {
             if ( pNode->Level != 1 + (unsigned)Abc_MaxInt( Abc_ObjFanin0(pNode)->Level, Abc_ObjFanin1(pNode)->Level ) )
-                printf( "Abc_AigCheck immediately after rewrite: Node \"%d\" (%d) handled has level that does not agree with the fanin levels.\n", pNode->fHandled, Abc_ObjId(pNode) );
-        pNode->pData = NULL;
-        if (pNode->fHandled)
-            pNode->fHandled = 0; 
+                    printf( "Abc_AigCheck immediately after rewrite: Node \"%d\" (%d) handled has level that does not agree with the fanin levels.\n", pNode->fHandled, Abc_ObjId(pNode) );
+            }
+        pNode->fHandled = 0; 
     }    
     List_PtrClear(oList);
 
@@ -426,8 +355,10 @@ pManRes->timeTotal = Abc_Clock() - clkStart;
     Abc_NtkReassignIds( pNtk );
 //    Abc_AigCheckFaninOrder( pNtk->pManFunc );
     // fix the levels
-    if ( fUpdateLevel )
+    if ( fUpdateLevel ){
+        Abc_NtkLevel( pNtk );
         Abc_NtkStopReverseLevels( pNtk );
+    }
     else
         Abc_NtkLevel( pNtk );
     // check
@@ -439,8 +370,7 @@ pManRes->timeTotal = Abc_Clock() - clkStart;
 //s_ResubTime = Abc_Clock() - clkStart;
     return 1;
 }
-
-
+  
 
 
 /**Function*************************************************************
@@ -2409,4 +2339,3 @@ Vec_Ptr_t * Abc_CutFactorLarge( Abc_Obj_t * pNode, int nLeavesMax )
 
 
 ABC_NAMESPACE_IMPL_END
-
